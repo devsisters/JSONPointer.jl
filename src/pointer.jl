@@ -69,10 +69,35 @@ function null_value(p::Pointer{T}) where T <: Array
     Any[]
 end
 
-Base.Dict(p::Pointer) = create_by_pointer(Dict, p)
-OrderedCollections.OrderedDict(p::Pointer) = create_by_pointer(OrderedCollections.OrderedDict, p)
+OrderedCollections.OrderedDict(p::Pointer) = structdict_by_pointer(OrderedCollections.OrderedDict, p)
 
-function create_by_pointer(::Type{T}, p::Pointer) where T <: AbstractDict
+
+
+for T in (Dict, OrderedCollections.OrderedDict)
+    @eval begin 
+        function $T{K,V}(kv) where K<:Pointer where V
+            firsttoken = kv[1][1]
+
+            if !isa(firsttoken.token[1], AbstractString) 
+                throw(ArgumentError("cannot construct Dictionary if firsttoken is not a string, $(firsttoken)"))
+            end
+            d = structdict_by_pointer($T, firsttoken)
+            for (k,v) in kv
+                d[k] = v
+            end
+            return d
+        end
+    end
+
+    @eval Base.haskey(dict::$T{K,V}, p::Pointer) where {K, V} = haskey_by_pointer(dict, p)
+    @eval Base.getindex(dict::$T{K,V}, p::Pointer) where {K, V} = getindex_by_pointer(dict, p)
+    @eval Base.setindex!(dict::$T{K,V}, v, p::Pointer) where {K, V} = setindex_by_pointer!(dict, v, p)
+    # @eval Base.setindex!(dict::$T{K,V}, v, p::Pointer) where {K <: Integer, V} = setindex_by_pointer!(dict, v, p)
+end
+getindex(A::AbstractArray, p::JSONPointer.Pointer{Any}) = getindex_by_pointer(A, p)
+
+
+function structdict_by_pointer(::Type{T}, p::Pointer) where T <: AbstractDict
     val = missing
    
     @inbounds for i in length(p):-1:1
@@ -96,7 +121,7 @@ function create_by_pointer(::Type{T}, p::Pointer) where T <: AbstractDict
     return val
 end
 
-function create_by_pointer(::Type{T}, arr::Array) where T <: AbstractDict
+function structdict_by_pointer(::Type{T}, arr::Array) where T <: AbstractDict
     template = T(arr[1])
     if length(arr) > 1
         @inbounds for p in arr
@@ -105,13 +130,6 @@ function create_by_pointer(::Type{T}, arr::Array) where T <: AbstractDict
         end
     end
     return template
-end
-
-for T in (Dict, OrderedCollections.OrderedDict)
-    @eval Base.haskey(dict::$T{K,V}, p::Pointer) where {K, V} = haskey_by_pointer(dict, p)
-    @eval Base.getindex(dict::$T{K,V}, p::Pointer) where {K, V} = getindex_by_pointer(dict, p)
-    @eval Base.setindex!(dict::$T{K,V}, v, p::Pointer) where {K, V} = setindex_by_pointer!(dict, v, p)
-    # @eval Base.setindex!(dict::$T{K,V}, v, p::Pointer) where {K <: Integer, V} = setindex_by_pointer!(dict, v, p)
 end
 
 function haskey_by_pointer(collection, p::Pointer)::Bool
