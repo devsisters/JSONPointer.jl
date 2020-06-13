@@ -1,13 +1,13 @@
 # JSONPointer
+![Run CI on master](https://github.com/devsisters/JSONPointer.jl/workflows/Run%20CI%20on%20master/badge.svg)
+
 implementation of JSONPointer on Julia
-
-
 
 ## Overview
 [JSONPointer](https://tools.ietf.org/html/rfc6901/) is a Unicode string 
 containing a sequence of zero or more reference tokens, each prefixed
 by a '/' (%x2F) character.
-
+Note that Julia is using 1-based index and, copied JSONPointer token from other language will give you wrong data
 
 ## Examples
 
@@ -42,4 +42,4 @@ julia> dict = Dict("a" => Dict("b" => Dict("c" => [100, Dict("d" => 200)])))
 
 ## Limitations
 - Can only used on Dictionary with a 'String' key
-- Supports Only 'Dict' and 'OrderedDict', but it can be extended for other 'AbstractDict' types. feel free to create a issue
+- Supports Only 'Dict' and 'OrderedDict', but could be extended for other 'AbstractDict' types. feel free to create a issue
