@@ -43,6 +43,8 @@ struct Pointer{T}
                 if iszero(jk[i]) 
                     throw(AssertionError("Julia uses 1-based indexing"))
                 end
+            else 
+                jk[i] = String(jk[i])
             end
         end
     
@@ -69,10 +71,6 @@ function null_value(p::Pointer{T}) where T <: Array
     Any[]
 end
 
-OrderedCollections.OrderedDict(p::Pointer) = structdict_by_pointer(OrderedCollections.OrderedDict, p)
-
-
-
 for T in (Dict, OrderedCollections.OrderedDict)
     @eval begin 
         function $T{K,V}(kv) where K<:Pointer where V
@@ -87,14 +85,14 @@ for T in (Dict, OrderedCollections.OrderedDict)
             end
             return d
         end
-    end
 
-    @eval Base.haskey(dict::$T{K,V}, p::Pointer) where {K, V} = haskey_by_pointer(dict, p)
-    @eval Base.getindex(dict::$T{K,V}, p::Pointer) where {K, V} = getindex_by_pointer(dict, p)
-    @eval Base.setindex!(dict::$T{K,V}, v, p::Pointer) where {K, V} = setindex_by_pointer!(dict, v, p)
-    # @eval Base.setindex!(dict::$T{K,V}, v, p::Pointer) where {K <: Integer, V} = setindex_by_pointer!(dict, v, p)
+        Base.haskey(dict::$T{K,V}, p::Pointer) where {K, V} = haskey_by_pointer(dict, p)
+        Base.getindex(dict::$T{K,V}, p::Pointer) where {K, V} = getindex_by_pointer(dict, p)
+        Base.setindex!(dict::$T{K,V}, v, p::Pointer) where {K, V} = setindex_by_pointer!(dict, v, p)
+        # Base.setindex!(dict::$T{K,V}, v, p::Pointer) where {K <: Integer, V} = setindex_by_pointer!(dict, v, p)
+    end
 end
-getindex(A::AbstractArray, p::JSONPointer.Pointer{Any}) = getindex_by_pointer(A, p)
+Base.getindex(A::AbstractArray, p::JSONPointer.Pointer{Any}) = getindex_by_pointer(A, p)
 
 
 function structdict_by_pointer(::Type{T}, p::Pointer) where T <: AbstractDict
@@ -180,7 +178,7 @@ function setindex_by_pointer!(collection::T, v, p::Pointer{U}) where {T <: Abstr
         end
     end
     prev = collection
-    DT = OrderedCollections.OrderedDict{String, Any}
+    DT = @eval $(Symbol(T.name)){String, Any}
 
     @inbounds for (i, k) in enumerate(p.token)
         if isa(prev, AbstractDict) 
