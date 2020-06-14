@@ -10,17 +10,11 @@ end
 A JSON Pointer is a Unicode string containing a sequence of zero or more reference tokens, each prefixed
 by a '/' (%x2F) character.
 
-### Example
-
-
-
-#
 Follows IETF JavaScript Object Notation (JSON) Pointer https://tools.ietf.org/html/rfc6901 
 
 ### A Few Differences are 
 - Index numbers starts from '1' instead of '0'  
 - User can declare type with '::T' notation at the end 
-
 """
 struct Pointer{T}
     token::Tuple
