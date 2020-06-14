@@ -23,6 +23,7 @@ Dict{String,Any} with 1 entry:
 
 ```
 
+
 **Accessing nested data**
 ```julia
 using JSONPointer 
@@ -39,6 +40,17 @@ julia> dict = Dict("a" => Dict("b" => Dict("c" => [100, Dict("d" => 200)])))
        dict[j"/a/b/c/1"]
        dict[j"/a/b/c/2/d"]
 ```
+
+## Advanced
+**Constructing Dictionary With Static type**
+
+additionally, you can enforce type with '::T' at the end of pointer 
+```julia
+    p1 = j"/a::Vector{Int}"
+    p2 = j"/b/2::String"
+    data = Dict(p1 => [1,2,3], p2 => "Must be a String")
+```
+
 
 ## Limitations
 - Can only used on Dictionary with a 'String' key
