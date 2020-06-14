@@ -46,38 +46,28 @@ struct Pointer{T}
     end
 end
 
-Pointer(token::Symbol) = Pointer(String(token))
-
-
 """ 
     null_value(p::Pointer{T}) where T
+    null_value(::Type{T}) where T
 
 provide appropriate value for 'T'
 'Real' return 'zero(T)' and 'AbstractString' returns '""'
 
-If user wants different null value for 'T' override 'null_value(p::JSONPointer{T})' method 
+If user wants different null value for 'T' override 'null_value(::Type{T})' method 
 
 """
-null_value(p::Pointer{T}) where T = missing 
-function null_value(p::Pointer{T}) where T <: Array
+null_value(p::Pointer) = null_value(eltype(p))
+null_value(::Type{T}) where T = missing 
+function null_value(::Type{T}) where T <: Array
     eltype(T) <: Real ? eltype(T)[] : 
     eltype(T) <: AbstractString ? eltype(T)[] :
     Any[]
 end
 
-for T in (Dict, OrderedCollections.OrderedDict)
+for T in (Dict, OrderedDict)
     @eval begin 
-        function $T{K,V}(kv) where K<:Pointer where V
-            firsttoken = kv[1][1]
-
-            if !isa(firsttoken.token[1], AbstractString) 
-                throw(ArgumentError("cannot construct Dictionary if firsttoken is not a string, $(firsttoken)"))
-            end
-            d = structdict_by_pointer($T, firsttoken)
-            for (k,v) in kv
-                d[k] = v
-            end
-            return d
+        function $T{K,V}(kv::Pair{<:Pointer,V}...) where K<:Pointer where V
+            $T{String,Any}()
         end
 
         Base.haskey(dict::$T{K,V}, p::Pointer) where {K, V} = haskey_by_pointer(dict, p)
@@ -91,7 +81,7 @@ Base.getindex(A::AbstractArray, p::JSONPointer.Pointer{Any}) = getindex_by_point
 
 function structdict_by_pointer(::Type{T}, p::Pointer) where T <: AbstractDict
     val = missing
-   
+    
     @inbounds for i in length(p):-1:1
         k = p.token[i]
         if isa(k, Integer)
@@ -172,12 +162,14 @@ function setindex_by_pointer!(collection::T, v, p::Pointer{U}) where {T <: Abstr
         end
     end
     prev = collection
-    DT = @eval $(Symbol(T.name)){String, Any}
-
+    
     @inbounds for (i, k) in enumerate(p.token)
         if isa(prev, AbstractDict) 
             DT = typeof(prev)
+        else 
+            DT = @eval $(Symbol(T.name)){String, Any}
         end
+
         if isa(prev, Array)
             if !isa(k, Integer)
                 throw(MethodError(setindex!, k))
@@ -214,7 +206,7 @@ function grow_array!(arr, target_size)
     if x > 0 
         T = eltype(arr)
         new_arr = Array{T, 1}(undef, x)
-        new_arr .= T <: Real ? zero(T) : missing
+        new_arr .= null_value(T)
         append!(arr, new_arr)
     end
     return arr
