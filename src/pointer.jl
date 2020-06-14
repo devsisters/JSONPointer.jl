@@ -37,8 +37,6 @@ struct Pointer{T}
                 if iszero(jk[i]) 
                     throw(AssertionError("Julia uses 1-based indexing"))
                 end
-            else 
-                jk[i] = String(jk[i])
             end
         end
     
@@ -78,42 +76,6 @@ for T in (Dict, OrderedDict)
 end
 Base.getindex(A::AbstractArray, p::JSONPointer.Pointer{Any}) = getindex_by_pointer(A, p)
 
-
-function structdict_by_pointer(::Type{T}, p::Pointer) where T <: AbstractDict
-    val = missing
-    
-    @inbounds for i in length(p):-1:1
-        k = p.token[i]
-        if isa(k, Integer)
-            tmp = Array{Any, 1}(missing, k)
-            tmp[k] = if i == length(p)
-                        null_value(p)
-                    else 
-                        val
-                    end
-            val = tmp 
-        elseif isa(k, AbstractString)
-            val = if i == length(p)
-                    T{String, Any}(k => null_value(p))
-                else 
-                    T{String, Any}(k => val)
-                end
-        end
-    end
-    return val
-end
-
-function structdict_by_pointer(::Type{T}, arr::Array) where T <: AbstractDict
-    template = T(arr[1])
-    if length(arr) > 1
-        @inbounds for p in arr
-            p2 = Pointer{Any}(p.token)
-            template[p2] = null_value(p)
-        end
-    end
-    return template
-end
-
 function haskey_by_pointer(collection, p::Pointer)::Bool
     b = true
     val = collection
@@ -141,6 +103,7 @@ function haskey_by_pointer(collection, p::Pointer)::Bool
     end
     return b
 end
+
 function getindex_by_pointer(collection, p::Pointer, i = 1)
     val = getindex(collection, p.token[i])
     if i < length(p)
@@ -148,7 +111,6 @@ function getindex_by_pointer(collection, p::Pointer, i = 1)
     end
     return val
 end
-
 
 function setindex_by_pointer!(collection::T, v, p::Pointer{U}) where {T <: AbstractDict, U}
     v = ismissing(v) ? null_value(p) : v
@@ -162,7 +124,7 @@ function setindex_by_pointer!(collection::T, v, p::Pointer{U}) where {T <: Abstr
         end
     end
     prev = collection
-    
+
     @inbounds for (i, k) in enumerate(p.token)
         if isa(prev, AbstractDict) 
             DT = typeof(prev)
@@ -201,12 +163,19 @@ function setindex_by_pointer!(collection::T, v, p::Pointer{U}) where {T <: Abstr
     setindex!(prev, v, p.token[end])
 end
 
-function grow_array!(arr, target_size)
+function grow_array!(arr::Array{T, N}, target_size) where T where N 
     x = target_size - length(arr) 
     if x > 0 
-        T = eltype(arr)
-        new_arr = Array{T, 1}(undef, x)
-        new_arr .= null_value(T)
+        if T <: Real 
+            new_arr = similar(arr, x)
+            new_arr .= zero(T)
+        elseif T == Any 
+            new_arr = similar(arr, x)
+            new_arr .= missing 
+        else 
+            new_arr = Array{Union{T, Missing}}(undef, x)
+            new_arr .= missing 
+        end
         append!(arr, new_arr)
     end
     return arr
