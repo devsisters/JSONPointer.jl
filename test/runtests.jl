@@ -48,30 +48,19 @@ end
 
     p1 = j"/a/1::Vector{Int}"
     p2 = j"/a/2::Float64"
-    p3 = j"/a/3/k::Dict"
-    p4 = j"/b::Vector{String}"
+    p3 = j"/b::Vector{String}"
 
-    data = Dict(p1 =>[10], p2 => 20, p3 => Dict(), p4 => ["this", "is"])
+    data = Dict(p1 =>[10], p2 => 20,  p3 => ["this", "is"])
     @test data[p1] == Int[10]
     @test data[p2] == 20.
-    @test isa(data[p3], Dict)
-    @test data[p4] == ["this", "is"]
+    @test data[p3] == ["this", "is"]
 
-    @test_throws ErrorException data[p3] = [100]
-    @test_throws ErrorException data[p4] = "this"
+    @test_throws ErrorException data[p2] = [1000]
+    @test_throws ErrorException data[p3] = "this"
 end
 
 @testset "error handling" begin
     p1 = j"/1/a"
     @test_throws MethodError Dict(p1 => 10)
 
-end
-
-
-function foo(xs::(Pair{K,V} where K <: JSONPointer.Pointer where V)...) 
-    @show "OK?"
-end
-function foo(xs::Pair{K,V}...) where K where V 
-    @show "im not"
-    @show typeof.(xs)
 end
