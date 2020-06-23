@@ -71,7 +71,7 @@ for T in (Dict, OrderedDict)
         Base.haskey(dict::$T{K,V}, p::Pointer) where {K, V} = haskey_by_pointer(dict, p)
         Base.getindex(dict::$T{K,V}, p::Pointer) where {K, V} = getindex_by_pointer(dict, p)
         Base.setindex!(dict::$T{K,V}, v, p::Pointer) where {K, V} = setindex_by_pointer!(dict, v, p)
-        Base.get(dict::$T{K,V}, p::JSONPointer, default) where {K, V} = get_by_pointer(dict, p, default)
+        Base.get(dict::$T{K,V}, p::Pointer, default) where {K, V} = get_by_pointer(dict, p, default)
 
         # Base.setindex!(dict::$T{K,V}, v, p::Pointer) where {K <: Integer, V} = setindex_by_pointer!(dict, v, p)
     end
@@ -119,7 +119,7 @@ function getindex_by_pointer(collection, p::Pointer, i = 1)
     return val
 end
 
-function get_by_pointer(collection, p::JSONPointer, default)
+function get_by_pointer(collection, p::Pointer, default)
     if haskey_by_pointer(collection, p)
         getindex_by_pointer(collection, p)
     else 
