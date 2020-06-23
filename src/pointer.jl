@@ -76,48 +76,53 @@ for T in (Dict, OrderedDict)
         # Base.setindex!(dict::$T{K,V}, v, p::Pointer) where {K <: Integer, V} = setindex_by_pointer!(dict, v, p)
     end
 end
-Base.getindex(A::AbstractArray, p::JSONPointer.Pointer{Any}) = getindex_by_pointer(A, p)
+Base.getindex(A::AbstractArray, p::Pointer{Any}) = getindex_by_pointer(A, p)
+Base.haskey(A::AbstractArray, p::Pointer) = getindex_by_pointer(A, p)
 
 function haskey_by_pointer(collection, p::Pointer)::Bool
     b = true
     val = collection
     @inbounds for (i, k) in enumerate(p.token)
-        val = begin 
-            if isa(val, Array)
-                if !isa(k, Integer)
-                    missing
-                else 
-                    length(val) >= k ? val[k] : missing 
-                end
-            else 
-                if isa(k, Integer)
-                    missing
-                else 
-                    haskey(val, k) ? val[k] : missing 
-                end
-            end
-        end
-
-        if ismissing(val)
+        if haskey_by_pointer(val, k)
+            val = getindex(val, k)
+        else
             b = false 
             break 
         end
     end
     return b
 end
+function haskey_by_pointer(collection, k)::Bool
+    b = false
+    if isa(collection, Array)
+        if isa(k, Integer)
+            if length(collection) >= k
+                b = true
+            end
+        end
+    else         
+        if !isa(k, Integer)
+            if haskey(collection, k)
+                b = true
+            end
+        end
+    end
+    return b
+end
 
 function getindex_by_pointer(collection, p::Pointer, i = 1)
-    if i == 1 
-        if !haskey(collection, p)
-            throw(KeyError(p))
-        end 
+    if !haskey_by_pointer(collection, p.token[i])
+        throw(KeyError(p))
     end
+    
     val = getindex(collection, p.token[i])
     if i < length(p)
         val = getindex_by_pointer(val, p, i+1)    
     end
     return val
 end
+
+
 
 function get_by_pointer(collection, p::Pointer, default)
     if haskey_by_pointer(collection, p)

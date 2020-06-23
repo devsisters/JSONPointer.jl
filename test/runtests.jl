@@ -24,14 +24,27 @@ end
     p1 = j"/a/b/c/d/e/f/g/1/2/a/b/c"
     data = Dict(p1 => "sooo deep")
     @test data[p1] == "sooo deep"
+    @test get(data, p1, missing) == "sooo deep"
+    
     @test isa(data[j"/a/b/c/d/e/f/g"], Array)
     @test ismissing(data[j"/a/b/c/d/e/f/g/1/1"])
+    
+    @test get(data, j"/a/f", missing) |> ismissing
+    @test get(data, j"/a/b/c/d/e/f/g/5", 10000) == 10000
+
+    @test_throws KeyError data[j"/a/f"]
+    @test_throws KeyError data[j"/a/b/c/d/e/f/g/5"]
+
 
     data = [[10, 20, 30, ["me"]]]
     @test data[j"/1"] == [10, 20, 30, ["me"]]
     @test data[j"/1/2"] == 20
     @test data[j"/1/4"] == ["me"]
     @test data[j"/1/4/1"] == "me"
+
+    # need to add get for Array?
+    @test_broken get(data, j"/1", missing) |> ismissing
+
 end
 
 
