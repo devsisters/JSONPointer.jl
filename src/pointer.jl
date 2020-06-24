@@ -19,6 +19,7 @@ Follows IETF JavaScript Object Notation (JSON) Pointer https://tools.ietf.org/ht
 struct Pointer{T}
     token::Tuple
 
+    Pointer{T}(token::Tuple) where T = new{T}(token)
     function Pointer(token::AbstractString)
         if !startswith(token, TOKEN_PREFIX) 
             throw(ArgumentError("JSONPointer must starts with '$TOKEN_PREFIX' prefix"))
@@ -43,6 +44,7 @@ struct Pointer{T}
         new{T}(tuple(jk...)) 
     end
 end
+
 
 """ 
     null_value(p::Pointer{T}) where T
@@ -78,6 +80,28 @@ for T in (Dict, OrderedDict)
 end
 Base.getindex(A::AbstractArray, p::Pointer{Any}) = getindex_by_pointer(A, p)
 Base.haskey(A::AbstractArray, p::Pointer) = getindex_by_pointer(A, p)
+
+function Base.unique(arr::Array{Pointer, N}) where N
+    out = deepcopy(arr)
+    if isempty(arr)
+        return out
+    end
+
+    pointers = getfield.(arr, :token)
+    if allunique(pointers)
+        return out 
+    end 
+
+    delete_target = Int[]
+    @inbounds for p in pointers 
+        indicies = findall(el -> el == p, pointers)
+        if length(indicies) > 1 
+            append!(delete_target, indicies[1:end-1])
+        end
+    end
+    deleteat!(out, unique(delete_target))
+end
+
 
 function haskey_by_pointer(collection, p::Pointer)::Bool
     b = true
@@ -121,9 +145,6 @@ function getindex_by_pointer(collection, p::Pointer, i = 1)
     end
     return val
 end
-
-
-
 function get_by_pointer(collection, p::Pointer, default)
     if haskey_by_pointer(collection, p)
         getindex_by_pointer(collection, p)
