@@ -167,10 +167,10 @@ function setindex_by_pointer!(collection::T, v, p::Pointer{U}) where {T <: Abstr
     prev = collection
 
     @inbounds for (i, k) in enumerate(p.token)
-        if isa(prev, AbstractDict) 
+        if typeof(prev) <: AbstractDict
             DT = typeof(prev)
         else 
-            DT = @eval $(Symbol(T.name)){String, Any}
+            DT = OrderedDict{String, Any}
         end
 
         if isa(prev, Array)
