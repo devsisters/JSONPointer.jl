@@ -1,6 +1,21 @@
 using Test, JSONPointer
 using OrderedCollections
 
+@testset "JSONPointer Basic" begin
+    a = j"/a/1/c"
+    b = j"/a/5"
+    c = j"/a/2/d::Vector"
+    d = j"/a/2/e::Vector{Int}"
+    e = j"/a/2/f::Vector{Float64}"
+
+    @test a.token == ("a", 1, "c")
+    @test b.token == ("a", 5)
+    @test c.token == ("a", 2, "d")
+    @test eltype(c) <: Array
+    @test eltype(d) <: Array{Int, 1}
+    @test eltype(e) <: Array{Float64, 1}
+end
+
 @testset "construct Dict with JSONPointer" begin 
     p1 = j"/ba/1/a"
     p2 = j"/ba/2/a"
@@ -15,6 +30,7 @@ using OrderedCollections
     data = OrderedDict(p1 => "This", p2 => "Is my Data")
     @test data[p1] == "This"
     @test data[p2] == "Is my Data"
+
 end
 
 @testset "access deep nested object" begin 
@@ -47,7 +63,6 @@ end
 
 end
 
-
 @testset "Enforce type on JSONPointer" begin 
     p1 = j"/a/1::String"
     p2 = j"/a/2::Int"
@@ -70,6 +85,16 @@ end
 
     @test_throws ErrorException data[p2] = [1000]
     @test_throws ErrorException data[p3] = "this"
+
+    # TODO User Defined type
+    struct Foo 
+    end
+    # @test_broken j"/foo::Foo"
+
+end
+
+@testset "Unique Method" begin 
+
 end
 
 @testset "error handling" begin
