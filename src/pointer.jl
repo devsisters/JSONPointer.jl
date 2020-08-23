@@ -38,9 +38,10 @@ struct Pointer{T}
                 if iszero(jk[i]) 
                     throw(AssertionError("Julia uses 1-based indexing"))
                 end
+            elseif occursin(r"^\\\d+$", jk[i]) # literal string for a number
+                jk[i] = chop(jk[i]; head=1, tail=0)
             end
         end
-    
         new{T}(tuple(jk...)) 
     end
 end

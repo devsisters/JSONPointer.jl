@@ -93,12 +93,23 @@ end
 
 end
 
-@testset "Unique Method" begin 
-
-end
-
 @testset "error handling" begin
     p1 = j"/1/a"
     @test_throws MethodError Dict(p1 => 10)
 
+end
+
+@testset "literal string" begin
+    p1 = j"/\5"
+    p2 = j"/\559"
+    p3 = j"/\900/10"
+
+    d = Dict(p1 => 1, p2 => 2, p3 => 3)
+    @test d[p1] == 1
+    @test d["5"] == 1
+    @test d[p2] == 2
+    @test d["559"] == 2
+
+    @test d[p3] == 3 
+    @test isa(d["900"], Array)
 end

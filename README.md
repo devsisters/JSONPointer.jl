@@ -4,10 +4,8 @@
 implementation of JSONPointer on Julia
 
 ## Overview
-[JSONPointer](https://tools.ietf.org/html/rfc6901/) is a Unicode string 
-containing a sequence of zero or more reference tokens, each prefixed
-by a '/' (%x2F) character.
-Note that Julia is using 1-based index and, copied JSONPointer token from other language will give you wrong data
+[JSONPointer](https://tools.ietf.org/html/rfc6901/) is a Unicode string containing a sequence of zero or more reference tokens, each prefixed by a '/' (%x2F) character.  
+**※ Note that Julia is using 1-based index and, copied JSONPointer token from other language will give you wrong data**
 
 ## Examples
 
@@ -50,6 +48,16 @@ additionally, you can enforce type with '::T' at the end of pointer
     p2 = j"/b/2::String"
     data = Dict(p1 => [1,2,3], p2 => "Must be a String")
 ```
+
+**String number as a key**
+If you need to use a string number as key for dict, put '\' in front of a number 
+```julia
+    p1 = j"/\10"
+    data = Dict(p1 => "this won't be a array")
+
+    data[p1]
+```
+
 
 
 ## Limitations
