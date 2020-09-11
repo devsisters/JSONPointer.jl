@@ -49,8 +49,8 @@ end
     @test get(data, j"/a/b/c/d/e/f/g/5", 10000) == 10000
 
     @test_throws KeyError data[j"/a/f"]
-    @test_throws KeyError data[j"/a/b/c/d/e/f/g/5"]
-
+    @test_throws KeyError data[j"/x"]
+    @test_throws BoundsError data[j"/a/b/c/d/e/f/g/5"]
 
     data = [[10, 20, 30, ["me"]]]
     @test data[j"/1"] == [10, 20, 30, ["me"]]
