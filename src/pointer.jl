@@ -135,17 +135,37 @@ function haskey_by_pointer(collection, k)::Bool
     return b
 end
 
-function getindex_by_pointer(collection, p::Pointer, i = 1)
-    if !haskey_by_pointer(collection, p.token[i])
-        throw(KeyError(p))
-    end
-    
-    val = getindex(collection, p.token[i])
-    if i < length(p)
-        val = getindex_by_pointer(val, p, i+1)    
-    end
-    return val
+function getindex_by_pointer(collection, p::Pointer)    
+    getindex_by_pointer(collection, p.token)
 end
+
+function getindex_by_pointer(collection, tokens::Tuple{<:Any})    
+    getindex(collection, tokens[1])
+end
+function getindex_by_pointer(collection, tokens::Tuple{<:Any, <:Any})    
+    getindex(getindex(collection, tokens[1]), tokens[2])
+end
+function getindex_by_pointer(collection, tokens::Tuple{<:Any, <:Any, <:Any})    
+    getindex(getindex(getindex(collection, tokens[1]), tokens[2]), tokens[3])
+end
+function getindex_by_pointer(collection, tokens::Tuple{<:Any, <:Any, <:Any, <:Any})    
+    getindex(getindex(getindex(getindex(collection, tokens[1]), tokens[2]), tokens[3]), tokens[4])
+end
+function getindex_by_pointer(collection, tokens::Tuple{<:Any, <:Any, <:Any, <:Any, <:Any})    
+    getindex(getindex(getindex(getindex(getindex(collection, tokens[1]), tokens[2]), tokens[3]), tokens[4]), tokens[5])
+end
+function getindex_by_pointer(collection, tokens::Tuple{<:Any, <:Any, <:Any, <:Any, <:Any, <:Any})    
+    getindex(getindex(getindex(getindex(getindex(getindex(collection, tokens[1]), tokens[2]), tokens[3]), tokens[4]), tokens[5]), tokens[6])
+end
+function getindex_by_pointer(collection, tokens::Tuple)
+    val = getindex_by_pointer(collection, tokens[1:6])
+    for i in 7:length(tokens)
+        val = getindex(val, tokens[i])
+    end
+    val
+end
+
+
 function get_by_pointer(collection, p::Pointer, default)
     if haskey_by_pointer(collection, p)
         getindex_by_pointer(collection, p)
