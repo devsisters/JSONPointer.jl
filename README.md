@@ -1,5 +1,8 @@
 # JSONPointer
+![LICENSE MIT](https://img.shields.io/badge/license-MIT-brightgreen.svg?style=flat-square)
 ![Run CI on master](https://github.com/devsisters/JSONPointer.jl/workflows/Run%20CI%20on%20master/badge.svg)
+[![Converage](https://devsisters.github.io/JSONPointer.jl/coverage/badge_linecoverage.svg)](https://devsisters.github.io/JSONPointer.jl/coverage/index)
+
 
 implementation of JSONPointer on Julia
 
