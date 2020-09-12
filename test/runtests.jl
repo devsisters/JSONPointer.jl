@@ -111,8 +111,8 @@ end
     p1 = j"/1/a"
     @test_throws MethodError Dict(p1 => 10)
 
-    @test_throws ArgumentError j"a/b/c"
-    @test_throws ArgumentError j"/a/0/1"
+    @test_throws ArgumentError JSONPointer.Pointer("a/b/c")
+    @test_throws ArgumentError JSONPointer.Pointer("/a/0/1")
 end
 
 @testset "literal string" begin
