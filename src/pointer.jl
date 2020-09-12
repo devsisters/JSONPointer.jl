@@ -36,7 +36,7 @@ struct Pointer{T}
             if occursin(r"^\d+$", jk[i]) # index of a array
                 jk[i] = parse(Int, string(jk[i]))
                 if iszero(jk[i]) 
-                    throw(AssertionError("Julia uses 1-based indexing"))
+                    throw(ArgumentError("Julia uses 1-based indexing, use '1' instead of '0'"))
                 end
             elseif occursin(r"^\\\d+$", jk[i]) # literal string for a number
                 jk[i] = chop(jk[i]; head=1, tail=0)

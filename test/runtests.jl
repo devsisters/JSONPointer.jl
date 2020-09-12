@@ -23,6 +23,10 @@ end
     data = Dict(p1 =>1, p2 => 2)
     @test data[p1] == 1
     @test data[p2] == 2
+    @test haskey(data, p1)
+    @test haskey(data, p2)
+    @test !haskey(data, j"/x")
+    @test !haskey(data, j"/ba/5")
 
     p1 = j"/a/1"
     p2 = j"/a/2/a"
@@ -60,7 +64,17 @@ end
 
     # need to add get for Array?
     @test_broken get(data, j"/1", missing) |> ismissing
+end
 
+@testset "grow obejct and array" begin 
+    d = Dict(j"/a" => Dict())
+    d[j"/a/b"] = []
+    d[j"/a/b/10"] = 10 
+    @test_throws Exception d[j"/a/5"] = 10 
+    @test_throws Exception d[j"/a/b/gd"] = 10 
+
+    @test isa(d[j"/a/b"], Array) 
+    @test isa(d[j"/a/b/2"], Missing) 
 end
 
 @testset "Enforce type on JSONPointer" begin 
@@ -97,6 +111,8 @@ end
     p1 = j"/1/a"
     @test_throws MethodError Dict(p1 => 10)
 
+    @test_throws ArgumentError j"a/b/c"
+    @test_throws ArgumentError j"/a/0/1"
 end
 
 @testset "literal string" begin
