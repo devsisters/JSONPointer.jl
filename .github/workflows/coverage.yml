@@ -24,10 +24,12 @@ jobs:
       - uses: julia-actions/julia-buildpkg@latest
       - uses: julia-actions/julia-runtest@latest
       - uses: julia-actions/julia-processcoverage@v1
-      - uses: actions/download-artifact@v2
+      - name: Download artifact
+        uses: dawidd6/action-download-artifact@v2
         with:
+          workflow: coverage.yml
           name: coverage-history
-          path: docs/coverage/history
+          path: docs/coverage/history/
       - name: Setup .NET Core # Required to execute ReportGenerator
         uses: actions/setup-dotnet@v1
         with:
