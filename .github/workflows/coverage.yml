@@ -38,6 +38,10 @@ jobs:
             reporttypes: 'HtmlInline;Badges' # The output formats and scope (separated by semicolon) Values: Badges, Clover, Cobertura, CsvSummary, Html, HtmlChart, HtmlInline, HtmlInline_AzurePipelines, HtmlInline_AzurePipelines_Dark, HtmlSummary, JsonSummary, Latex, LatexSummary, lcov, MHtml, PngChart, SonarQube, TeamCitySummary, TextSummary, Xml, XmlSummary
             verbosity: 'Info' # The verbosity level of the log messages. Values: Verbose, Info, Warning, Error, Off
             tag: '${{ github.run_number }}_${{ github.run_id }}' # Optional tag or build version.
+      - uses: actions/upload-artifact@v2
+        with:
+          name: coverage-history
+          path: docs/coverage/history/
       - uses: EndBug/add-and-commit@v4 # You can change this to use a specific version
         with:
           add: 'docs/coverage'
