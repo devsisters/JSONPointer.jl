@@ -1,4 +1,5 @@
-using Test, JSONPointer
+using Test
+using JSONPointer
 using OrderedCollections
 
 @testset "JSONPointer Basic" begin
@@ -46,6 +47,14 @@ end
     @test data[p1] == "sooo deep"
     @test get(data, p1, missing) == "sooo deep"
     
+    @test haskey(data, j"/a/b/c")
+    @test haskey(data, j"/a/b/c/d")
+    @test haskey(data, j"/a/b/c/d/e/f/g/1")
+    @test !haskey(data, j"/a/b/c/d/e/f/g/2")
+
+    @test isa(data[j"/a/b/c"], AbstractDict)
+    @test isa(data[j"/a/b/c/d"], AbstractDict)
+    @test isa(data[j"/a/b/c/d/e"], AbstractDict)
     @test isa(data[j"/a/b/c/d/e/f/g"], Array)
     @test ismissing(data[j"/a/b/c/d/e/f/g/1/1"])
     
@@ -99,6 +108,10 @@ end
 
     @test_throws ErrorException data[p2] = [1000]
     @test_throws ErrorException data[p3] = "this"
+
+    d = Dict(p1 => missing, p3 => missing)
+    @test d[p1] == JSONPointer.null_value(p1)
+    @test d[p3] == JSONPointer.null_value(p3)
 
     # TODO User Defined type
     struct Foo 
