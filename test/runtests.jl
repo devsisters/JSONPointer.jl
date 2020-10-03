@@ -2,24 +2,84 @@ using Test
 using JSONPointer
 using OrderedCollections
 
-@testset "JSONPointer Basic" begin
-    a = j"/a/1/c"
-    b = j"/a/5"
-    c = j"/a/2/d::Vector"
-    d = j"/a/2/e::Vector{Int}"
-    e = j"/a/2/f::Vector{Float64}"
+@testset "Basic Tests" begin 
+    doc = Dict("foo" => ["bar", "baz"],
+                ""=> 0,
+                "a/b"=> 1,
+                "c%d"=> 2,
+                "e^f"=> 3,
+                "g|h"=> 4,
+                "i\\j"=> 5,
+                "k\"l"=> 6,
+                " "=> 7,
+                "m~n"=> 8)
 
-    @test a.token == ("a", 1, "c")
-    @test b.token == ("a", 5)
-    @test c.token == ("a", 2, "d")
-    @test eltype(c) <: Array
-    @test eltype(d) <: Array{Int, 1}
-    @test eltype(e) <: Array{Float64, 1}
+        @test doc[j""] == doc
+        @test doc[j"/foo"] == ["bar", "baz"]
+        @test doc[JSONPointer.Pointer("/foo/0"; shift_index = true)] == "bar"
+        @test doc[j"/foo/1"] == "bar"
+        @test doc[j"/"] == 0
+        @test doc[j"/a~1b"] == 1
+        @test doc[j"/c%d"] == 2
+        @test doc[j"/e^f"] == 3
+        @test doc[j"/g|h"] == 4
+        @test doc[JSONPointer.Pointer("/i\\j")] == 5
+        @test doc[j"/k\"l"] == 6
+        @test doc[j"/ "] == 7
+        @test doc[j"/m~0n"] == 8
+end
+
+@testset "URI Fragment Tests" begin 
+    doc = Dict("foo" => ["bar", "baz"],
+                ""=> 0,
+                "a/b"=> 1,
+                "c%d"=> 2,
+                "e^f"=> 3,
+                "g|h"=> 4,
+                "i\\j"=> 5,
+                "k\"l"=> 6,
+                " "=> 7,
+                "m~n"=> 8)
+
+    @test doc[j"#"] == doc
+    @test doc[j"#/foo"] == ["bar", "baz"]
+    @test doc[JSONPointer.Pointer("#/foo/0"; shift_index = true)] == "bar"
+    @test doc[j"#/foo/1"] == "bar"
+    @test doc[j"#/"] == 0
+    @test doc[j"#/a~1b"] == 1
+    @test doc[j"#/c%25d"] == 2
+    @test doc[j"#/e%5Ef"] == 3
+    @test doc[j"#/g%7Ch"] == 4
+    @test doc[j"#/i%5Cj"] == 5
+    @test doc[j"#/k%22l"] == 6
+    @test doc[j"#/%20"] == 7
+    @test doc[j"#/m~0n"] == 8
+end
+
+@testset "WrongInputTests" begin 
+
+    @test_throws ArgumentError JSONPointer.Pointer("some/thing")
+
+    doc = [0, 1, 2]
+    @test_throws ArgumentError doc[j"/a"]
+    @test_throws BoundsError doc[j"/10"]
+
+end
+
+@testset "JSONPointer Advanced" begin
+    a = j"/a/2/d::Vector"
+    b = j"/a/2/e::Vector{Int}"
+    c = j"/a/2/f::Vector{Float64}"
+
+    @test a.token == ("a", 2, "d")
+    @test eltype(a) <: Array
+    @test eltype(b) <: Array{Int, 1}
+    @test eltype(c) <: Array{Float64, 1}
 end
 
 @testset "construct Dict with JSONPointer" begin 
-    p1 = j"/ba/1/a"
-    p2 = j"/ba/2/a"
+    p1 = j"/a/1/b"
+    p2 = j"/cd/2/ef"
 
     data = Dict(p1 =>1, p2 => 2)
     @test data[p1] == 1
@@ -29,8 +89,8 @@ end
     @test !haskey(data, j"/x")
     @test !haskey(data, j"/ba/5")
 
-    p1 = j"/a/1"
-    p2 = j"/a/2/a"
+    p1 = j"/ab/1"
+    p2 = j"/cd/2/ef"
 
     data = OrderedDict(p1 => "This", p2 => "Is my Data")
     @test data[p1] == "This"
@@ -78,12 +138,13 @@ end
 @testset "grow obejct and array" begin 
     d = Dict(j"/a" => Dict())
     d[j"/a/b"] = []
-    d[j"/a/b/10"] = 10 
-    @test_throws Exception d[j"/a/5"] = 10 
-    @test_throws Exception d[j"/a/b/gd"] = 10 
+    d[j"/a/b/2"] = 1
+    d[j"/a/b/5"] = 2 
+    @test_throws Exception d[j"/a/5"] = "something" 
+    @test_throws Exception d[j"/a/b/gd"] = "nothing" 
 
     @test isa(d[j"/a/b"], Array) 
-    @test isa(d[j"/a/b/2"], Missing) 
+    @test isa(d[j"/a/b/1"], Missing) 
 end
 
 @testset "Enforce type on JSONPointer" begin 
@@ -120,15 +181,7 @@ end
 
 end
 
-@testset "error handling" begin
-    p1 = j"/1/a"
-    @test_throws MethodError Dict(p1 => 10)
-
-    @test_throws ArgumentError JSONPointer.Pointer("a/b/c")
-    @test_throws ArgumentError JSONPointer.Pointer("/a/0/1")
-end
-
-@testset "literal string" begin
+@testset "literal string for a Number" begin
     p1 = j"/\5"
     p2 = j"/\559"
     p3 = j"/\900/10"

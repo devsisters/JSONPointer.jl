@@ -24,6 +24,15 @@ struct Pointer{T}
 
     Pointer{T}(token::Tuple) where T = new{T}(token)
     function Pointer(token::AbstractString; shift_index = false)
+        # URI Fragment
+        if startswith(token, "#")
+            token = token[2:end]
+            token = unescape_jpath(token)
+        end
+        
+        if isempty(token)
+            return Pointer{Nothing}(tuple(""))
+        end
         if !startswith(token, TOKEN_PREFIX) 
             throw(ArgumentError("JSONPointer must starts with '$TOKEN_PREFIX' prefix"))
         end
@@ -48,8 +57,8 @@ struct Pointer{T}
                 end
             elseif occursin(r"^\\\d+$", jk[i]) # literal string for a number
                 jk[i] = chop(jk[i]; head=1, tail=0)
-            else  
-                jk[i] = unescape_jpath(jk[i])
+            elseif occursin("~", jk[i]) 
+                jk[i] = replace(replace(jk[i], "~0" => "~"), "~1" => "/")
             end
         end
         new{T}(tuple(jk...)) 
@@ -63,14 +72,13 @@ Transform escaped characters in JPaths back to their original value.
 https://tools.ietf.org/html/rfc6901
 """
 function unescape_jpath(raw::AbstractString)
-    ret = replace(replace(raw, "~0" => "~"), "~1" => "/")
-    m = match(r"%([0-9A-F]{2})", ret)
+    m = match(r"%([0-9A-F]{2})", raw)
     if m !== nothing
         for c in m.captures
-            ret = replace(ret, "%$(c)" => Char(parse(UInt8, "0x$(c)")))
+            raw = replace(raw, "%$(c)" => Char(parse(UInt8, "0x$(c)")))
         end
     end
-    return ret
+    return raw
 end
 
 
@@ -162,6 +170,9 @@ function haskey_by_pointer(collection, k)::Bool
     return b
 end
 
+function getindex_by_pointer(collection, p::Pointer{Nothing})
+    collection
+end
 function getindex_by_pointer(collection, p::Pointer)    
     getindex_by_pointer(collection, p.token)
 end
@@ -278,3 +289,6 @@ function Base.show(io::IO, x::Pointer{T}) where T
     "JSONPointer{", T, "}(\"/", join(x.token, "/"), "\")")
 end
 
+function Base.show(io::IO, x::Pointer{Nothing})
+    print(io, "JSONPointer{Nothing}(\"\")")
+end
