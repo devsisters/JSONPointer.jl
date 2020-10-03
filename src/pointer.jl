@@ -12,15 +12,18 @@ by a '/' (%x2F) character.
 
 Follows IETF JavaScript Object Notation (JSON) Pointer https://tools.ietf.org/html/rfc6901 
 
-### A Few Differences are 
 - Index numbers starts from '1' instead of '0'  
 - User can declare type with '::T' notation at the end 
+
+# Arguments
+- `shift_index` : shift given index by 1 for compatibility with original JSONPointer
+
 """
 struct Pointer{T}
     token::Tuple
 
     Pointer{T}(token::Tuple) where T = new{T}(token)
-    function Pointer(token::AbstractString)
+    function Pointer(token::AbstractString; shift_index = false)
         if !startswith(token, TOKEN_PREFIX) 
             throw(ArgumentError("JSONPointer must starts with '$TOKEN_PREFIX' prefix"))
         end
@@ -34,16 +37,40 @@ struct Pointer{T}
         end
         @inbounds for i in 1:length(jk)
             if occursin(r"^\d+$", jk[i]) # index of a array
-                jk[i] = parse(Int, string(jk[i]))
+                jk[i] = if shift_index 
+                    parse(Int, string(jk[i])) + 1
+                else 
+                    parse(Int, string(jk[i]))
+                end
+                
                 if iszero(jk[i]) 
                     throw(ArgumentError("Julia uses 1-based indexing, use '1' instead of '0'"))
                 end
             elseif occursin(r"^\\\d+$", jk[i]) # literal string for a number
                 jk[i] = chop(jk[i]; head=1, tail=0)
+            else  
+                jk[i] = unescape_jpath(jk[i])
             end
         end
         new{T}(tuple(jk...)) 
     end
+end
+
+"""
+    unescape_jpath(raw::String)
+
+Transform escaped characters in JPaths back to their original value.
+https://tools.ietf.org/html/rfc6901
+"""
+function unescape_jpath(raw::AbstractString)
+    ret = replace(replace(raw, "~0" => "~"), "~1" => "/")
+    m = match(r"%([0-9A-F]{2})", ret)
+    if m !== nothing
+        for c in m.captures
+            ret = replace(ret, "%$(c)" => Char(parse(UInt8, "0x$(c)")))
+        end
+    end
+    return ret
 end
 
 
