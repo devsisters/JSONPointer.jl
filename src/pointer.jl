@@ -139,6 +139,7 @@ function Base.unique(arr::Array{Pointer, N}) where N
 end
 
 
+haskey_by_pointer(collection, p::Pointer{Nothing}) = true
 function haskey_by_pointer(collection, p::Pointer)::Bool
     b = true
     val = collection
