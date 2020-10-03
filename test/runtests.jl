@@ -27,6 +27,21 @@ using OrderedCollections
         @test doc[j"/k\"l"] == 6
         @test doc[j"/ "] == 7
         @test doc[j"/m~0n"] == 8
+
+        for k in (j"", 
+                  j"/foo", 
+                  j"/foo/1", 
+                  j"/", 
+                  j"/a~1b",
+                  j"/c%d",
+                  j"/e^f",
+                  j"/g|h",
+                  JSONPointer.Pointer("/i\\j"),
+                  j"/k\"l",
+                  j"/ ",
+                  j"/m~0n")
+            @test haskey(doc, k)
+        end
 end
 
 @testset "URI Fragment Tests" begin 
