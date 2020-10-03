@@ -3,12 +3,10 @@
 ![Run CI on master](https://github.com/devsisters/JSONPointer.jl/workflows/Run%20CI%20on%20master/badge.svg)
 [![Converage](https://devsisters.github.io/JSONPointer.jl/coverage/badge_linecoverage.svg)](https://devsisters.github.io/JSONPointer.jl/coverage/index)
 
-
-implementation of JSONPointer on Julia
+Implementation of JSON Pointers according to [RFC 6901](https://tools.ietf.org/html/rfc6901/)
 
 ## Overview
 [JSONPointer](https://tools.ietf.org/html/rfc6901/) is a Unicode string containing a sequence of zero or more reference tokens, each prefixed by a '/' (%x2F) character.  
-**※ Note that Julia is using 1-based index and, copied JSONPointer token from other language will give you wrong data**
 
 ## Examples
 
@@ -23,7 +21,6 @@ Dict{String,Any} with 1 entry:
   "a" => Any[Dict{String,Any}("b"=>1), Dict{String,Any}("b"=>2)]
 
 ```
-
 
 **Accessing nested data**
 ```julia
@@ -62,7 +59,10 @@ If you need to use a string number as key for dict, put '\' in front of a number
 ```
 
 
-
 ## Limitations
 - Can only used on Dictionary with a 'String' key
 - Supports Only 'Dict' and 'OrderedDict', but could be extended for other 'AbstractDict' types. feel free to create a issue
+- Note that Julia is using 1-based index, 0-based index can be used if argument `shift_index = true` is given to a `JSONPointer.Pointer` constructer
+``` julia
+julia>JSONPointer.Pointer(j"/foo/0"; shift_index = true)
+```
