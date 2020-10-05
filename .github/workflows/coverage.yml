@@ -25,11 +25,12 @@ jobs:
         - uses: julia-actions/julia-runtest@latest
         - uses: julia-actions/julia-processcoverage@v1
         - name: Merge master -> gh-pages
-          uses: devmasx/merge-branch@v1.3.0
+          uses: everlytic/branch-merge@1.1.0
           with:
-            type: now
-            target_branch: gh-pages
             github_token: ${{ github.token }}
+            source_ref: ${{ github.ref }}
+            target_branch: 'gh-pages'
+            commit_message_template: '[Automated] Merged {source_ref} into target {target_branch}'
         - uses: actions/upload-artifact@v2
           with:
             name: lcov
@@ -63,7 +64,7 @@ jobs:
 
       - uses: EndBug/add-and-commit@v4 # You can change this to use a specific version
         with:
-          add: 'docs/* src/*'
+          add: 'docs/*'
           message: 'Coverage Report ${{ github.sha }}'
           ref: 'gh-pages'
         env:
