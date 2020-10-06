@@ -61,7 +61,7 @@ struct Pointer{T}
                 jk[i] = replace(replace(jk[i], "~0" => "~"), "~1" => "/")
             end
         end
-        new{T}(tuple(jk...))
+        return new{T}(tuple(jk...))
     end
 end
 
@@ -83,22 +83,24 @@ end
 
 
 """
-    null_value(p::Pointer{T}) where T
-    null_value(::Type{T}) where T
+    null_value(p::Pointer{T}) where {T}
+    null_value(::Type{T}) where {T}
 
-provide appropriate value for 'T'
+Provide appropriate value for 'T'.
+
 'Real' return 'zero(T)' and 'AbstractString' returns '""'
 
-If user wants different null value for 'T' override 'null_value(::Type{T})' method
-
+If user wants different null value for 'T' override 'null_value(::Type{T})' method.
 """
 null_value(p::Pointer) = null_value(eltype(p))
-null_value(::Type{T}) where T = missing
-function null_value(::Type{T}) where T <: Array
-    eltype(T) <: Real ? eltype(T)[] :
-    eltype(T) <: AbstractString ? eltype(T)[] :
-    Any[]
-end
+
+null_value(::Type{T}) where {T} = missing
+
+null_value(::Type{<:AbstractArray{T}}) where {T <: Real} = T[]
+
+null_value(::Type{<:AbstractArray{T}}) where {T <: AbstractString} = T[]
+
+null_value(::Any) = Any[]
 
 # This code block needs some explaining.
 #
@@ -119,10 +121,13 @@ for T in (Dict, OrderedCollections.OrderedDict)
         end
 
         Base.haskey(dict::$T, p::Pointer) = haskey_by_pointer(dict, p)
+
         Base.getindex(dict::$T, p::Pointer) = getindex_by_pointer(dict, p)
+
         function Base.setindex!(dict::$T, v, p::Pointer)
             return setindex_by_pointer!(dict, v, p)
         end
+
         function Base.get(dict::$T, p::Pointer, default)
             return get_by_pointer(dict, p, default)
         end
@@ -130,19 +135,18 @@ for T in (Dict, OrderedCollections.OrderedDict)
 end
 
 Base.getindex(A::AbstractArray, p::Pointer{Any}) = getindex_by_pointer(A, p)
+
 Base.haskey(A::AbstractArray, p::Pointer) = getindex_by_pointer(A, p)
 
-function Base.unique(arr::Array{Pointer, N}) where N
+function Base.unique(arr::Array{Pointer, N}) where {N}
     out = deepcopy(arr)
     if isempty(arr)
         return out
     end
-
     pointers = getfield.(arr, :token)
     if allunique(pointers)
         return out
     end
-
     delete_target = Int[]
     @inbounds for p in pointers
         indicies = findall(el -> el == p, pointers)
@@ -153,82 +157,51 @@ function Base.unique(arr::Array{Pointer, N}) where N
     deleteat!(out, unique(delete_target))
 end
 
-
 haskey_by_pointer(collection, p::Pointer{Nothing}) = true
-function haskey_by_pointer(collection, p::Pointer)::Bool
-    b = true
-    val = collection
-    @inbounds for (i, k) in enumerate(p.token)
-        if haskey_by_pointer(val, k)
-            val = getindex(val, k)
-        else
-            b = false
-            break
+
+function haskey_by_pointer(collection, p::Pointer)
+    for k in p.token
+        if !haskey_by_pointer(collection, k)
+            return false
         end
+        collection = collection[k]
     end
-    return b
-end
-function haskey_by_pointer(collection, k)::Bool
-    b = false
-    if isa(collection, Array)
-        if isa(k, Integer)
-            if length(collection) >= k
-                b = true
-            end
-        end
-    else
-        if !isa(k, Integer)
-            if haskey(collection, k)
-                b = true
-            end
-        end
-    end
-    return b
+    return true
 end
 
-function getindex_by_pointer(collection, p::Pointer{Nothing})
-    collection
+haskey_by_pointer(collection, k) = haskey(collection, k)
+
+haskey_by_pointer(collection::AbstractArray, k) = false
+
+function haskey_by_pointer(collection::AbstractArray, k::Integer)
+    return 1 <= k <= length(collection)
 end
+
+function getindex_by_pointer(collection, ::Pointer{Nothing})
+    return collection
+end
+
 function getindex_by_pointer(collection, p::Pointer)
-    getindex_by_pointer(collection, p.token)
+    return getindex_by_pointer(collection, p.token)
 end
 
-function getindex_by_pointer(collection, tokens::Tuple{<:Any})
-    getindex(collection, tokens[1])
-end
-function getindex_by_pointer(collection, tokens::Tuple{<:Any, <:Any})
-    getindex(getindex(collection, tokens[1]), tokens[2])
-end
-function getindex_by_pointer(collection, tokens::Tuple{<:Any, <:Any, <:Any})
-    getindex(getindex(getindex(collection, tokens[1]), tokens[2]), tokens[3])
-end
-function getindex_by_pointer(collection, tokens::Tuple{<:Any, <:Any, <:Any, <:Any})
-    getindex(getindex(getindex(getindex(collection, tokens[1]), tokens[2]), tokens[3]), tokens[4])
-end
-function getindex_by_pointer(collection, tokens::Tuple{<:Any, <:Any, <:Any, <:Any, <:Any})
-    getindex(getindex(getindex(getindex(getindex(collection, tokens[1]), tokens[2]), tokens[3]), tokens[4]), tokens[5])
-end
-function getindex_by_pointer(collection, tokens::Tuple{<:Any, <:Any, <:Any, <:Any, <:Any, <:Any})
-    getindex(getindex(getindex(getindex(getindex(getindex(collection, tokens[1]), tokens[2]), tokens[3]), tokens[4]), tokens[5]), tokens[6])
-end
 function getindex_by_pointer(collection, tokens::Tuple)
-    val = getindex_by_pointer(collection, tokens[1:6])
-    for i in 7:length(tokens)
-        val = getindex(val, tokens[i])
+    for token in tokens
+        collection = collection[token]
     end
-    val
+    return collection
 end
-
 
 function get_by_pointer(collection, p::Pointer, default)
     if haskey_by_pointer(collection, p)
-        getindex_by_pointer(collection, p)
-    else
-        default
+        return getindex_by_pointer(collection, p)
     end
+    return default
 end
 
-function setindex_by_pointer!(collection::T, v, p::Pointer{U}) where {T <: AbstractDict, U}
+function setindex_by_pointer!(
+    collection::T, v, p::Pointer{U}
+) where {T <: AbstractDict, U}
     v = ismissing(v) ? null_value(p) : v
     if !isa(v, U) &&
         try
@@ -240,7 +213,6 @@ function setindex_by_pointer!(collection::T, v, p::Pointer{U}) where {T <: Abstr
         end
     end
     prev = collection
-
     @inbounds for (i, k) in enumerate(p.token)
         if typeof(prev) <: AbstractDict
             DT = typeof(prev)
@@ -261,9 +233,8 @@ function setindex_by_pointer!(collection::T, v, p::Pointer{U}) where {T <: Abstr
                 setindex!(prev, missing, k)
             end
         end
-
         if i < length(p)
-            tmp = getindex(prev, k)
+            tmp = prev[k]
             if ismissing(tmp)
                 next_key = p.token[i+1]
                 if isa(next_key, Integer)
@@ -273,38 +244,31 @@ function setindex_by_pointer!(collection::T, v, p::Pointer{U}) where {T <: Abstr
                 end
                 setindex!(prev, new_data, k)
             end
-            prev = getindex(prev, k)
+            prev = prev[k]
         end
     end
-    setindex!(prev, v, p.token[end])
+    return setindex!(prev, v, p.token[end])
 end
 
-function grow_array!(arr::Array{T, N}, target_size) where T where N
+_new_arr(::Type{T}, x::Int) where {T <: Real} = zeros(T, x)
+_new_arr(::Type{Any}, x::Int) = Vector{Any}(missing, x)
+_new_arr(::Type{T}, x::Int) where {T} = Vector{Union{T, Missing}}(missing, x)
+
+function grow_array!(arr::Array{T, N}, target_size::Integer) where {T, N}
     x = target_size - length(arr)
     if x > 0
-        if T <: Real
-            new_arr = similar(arr, x)
-            new_arr .= zero(T)
-        elseif T == Any
-            new_arr = similar(arr, x)
-            new_arr .= missing
-        else
-            new_arr = Array{Union{T, Missing}}(undef, x)
-            new_arr .= missing
-        end
-        append!(arr, new_arr)
+        append!(arr, _new_arr(T, x))
     end
     return arr
 end
 
 Base.length(x::Pointer) = length(x.token)
-Base.eltype(x::Pointer{T}) where T = T
+Base.eltype(::Pointer{T}) where {T} = T
 
-function Base.show(io::IO, x::Pointer{T}) where T
-    print(io,
-    "JSONPointer{", T, "}(\"/", join(x.token, "/"), "\")")
+function Base.show(io::IO, x::Pointer{T}) where {T}
+    print(io, "JSONPointer{", T, "}(\"/", join(x.token, "/"), "\")")
 end
 
-function Base.show(io::IO, x::Pointer{Nothing})
+function Base.show(io::IO, ::Pointer{Nothing})
     print(io, "JSONPointer{Nothing}(\"\")")
 end
