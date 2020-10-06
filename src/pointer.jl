@@ -100,20 +100,35 @@ function null_value(::Type{T}) where T <: Array
     Any[]
 end
 
+# This code block needs some explaining.
+#
+# Ideally, one would define methods like Base.haskey(::AbstractDict, ::Pointer).
+# However, this causes an ambiguity with Base.haskey(::Dict, key), which has a
+# more concrete first argument and a less concrete second argument. We could
+# just define both methods to avoid the ambiguity with Dict, but this would
+# probably break any package which defines an <:AbstractDict and fails to type
+# the second argument to haskey, getindex, etc!
+#
+# To avoid the ambiguity issue, we have to manually encode each AbstractDict
+# subtype that we support :(
 for T in (Dict, OrderedCollections.OrderedDict)
     @eval begin
-        function $T{K,V}(kv::Pair{<:Pointer,V}...) where K<:Pointer where V
+        # TODO(odow): remove this method?
+        function $T{K,V}(kv::Pair{<:Pointer,V}...) where {V, K<:Pointer}
             $T{String,Any}()
         end
 
-        Base.haskey(dict::$T{K,V}, p::Pointer) where {K, V} = haskey_by_pointer(dict, p)
-        Base.getindex(dict::$T{K,V}, p::Pointer) where {K, V} = getindex_by_pointer(dict, p)
-        Base.setindex!(dict::$T{K,V}, v, p::Pointer) where {K, V} = setindex_by_pointer!(dict, v, p)
-        Base.get(dict::$T{K,V}, p::Pointer, default) where {K, V} = get_by_pointer(dict, p, default)
-
-        # Base.setindex!(dict::$T{K,V}, v, p::Pointer) where {K <: Integer, V} = setindex_by_pointer!(dict, v, p)
+        Base.haskey(dict::$T, p::Pointer) = haskey_by_pointer(dict, p)
+        Base.getindex(dict::$T, p::Pointer) = getindex_by_pointer(dict, p)
+        function Base.setindex!(dict::$T, v, p::Pointer)
+            return setindex_by_pointer!(dict, v, p)
+        end
+        function Base.get(dict::$T, p::Pointer, default)
+            return get_by_pointer(dict, p, default)
+        end
     end
 end
+
 Base.getindex(A::AbstractArray, p::Pointer{Any}) = getindex_by_pointer(A, p)
 Base.haskey(A::AbstractArray, p::Pointer) = getindex_by_pointer(A, p)
 
