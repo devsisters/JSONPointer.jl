@@ -3,58 +3,64 @@ using JSONPointer
 using OrderedCollections
 
 @testset "Basic Tests" begin
-    doc = Dict("foo" => ["bar", "baz"],
-                ""=> 0,
-                "a/b"=> 1,
-                "c%d"=> 2,
-                "e^f"=> 3,
-                "g|h"=> 4,
-                "i\\j"=> 5,
-                "k\"l"=> 6,
-                " "=> 7,
-                "m~n"=> 8)
+    doc = Dict(
+        "foo" => ["bar", "baz"],
+        "" => 0,
+        "a/b" => 1,
+        "c%d" => 2,
+        "e^f" => 3,
+        "g|h" => 4,
+        "i\\j" => 5,
+        "k\"l" => 6,
+        " " => 7,
+        "m~n" => 8
+    )
 
-        @test doc[j""] == doc
-        @test doc[j"/foo"] == ["bar", "baz"]
-        @test doc[JSONPointer.Pointer("/foo/0"; shift_index = true)] == "bar"
-        @test doc[j"/foo/1"] == "bar"
-        @test doc[j"/"] == 0
-        @test doc[j"/a~1b"] == 1
-        @test doc[j"/c%d"] == 2
-        @test doc[j"/e^f"] == 3
-        @test doc[j"/g|h"] == 4
-        @test doc[JSONPointer.Pointer("/i\\j")] == 5
-        @test doc[j"/k\"l"] == 6
-        @test doc[j"/ "] == 7
-        @test doc[j"/m~0n"] == 8
+    @test doc[j""] == doc
+    @test doc[j"/foo"] == ["bar", "baz"]
+    @test doc[JSONPointer.Pointer("/foo/0"; shift_index = true)] == "bar"
+    @test doc[j"/foo/1"] == "bar"
+    @test doc[j"/"] == 0
+    @test doc[j"/a~1b"] == 1
+    @test doc[j"/c%d"] == 2
+    @test doc[j"/e^f"] == 3
+    @test doc[j"/g|h"] == 4
+    @test doc[JSONPointer.Pointer("/i\\j")] == 5
+    @test doc[j"/k\"l"] == 6
+    @test doc[j"/ "] == 7
+    @test doc[j"/m~0n"] == 8
 
-        for k in (j"",
-                  j"/foo",
-                  j"/foo/1",
-                  j"/",
-                  j"/a~1b",
-                  j"/c%d",
-                  j"/e^f",
-                  j"/g|h",
-                  JSONPointer.Pointer("/i\\j"),
-                  j"/k\"l",
-                  j"/ ",
-                  j"/m~0n")
-            @test haskey(doc, k)
-        end
+    for k in (
+        j"",
+        j"/foo",
+        j"/foo/1",
+        j"/",
+        j"/a~1b",
+        j"/c%d",
+        j"/e^f",
+        j"/g|h",
+        JSONPointer.Pointer("/i\\j"),
+        j"/k\"l",
+        j"/ ",
+        j"/m~0n",
+    )
+        @test haskey(doc, k)
+    end
 end
 
 @testset "URI Fragment Tests" begin
-    doc = Dict("foo" => ["bar", "baz"],
-                ""=> 0,
-                "a/b"=> 1,
-                "c%d"=> 2,
-                "e^f"=> 3,
-                "g|h"=> 4,
-                "i\\j"=> 5,
-                "k\"l"=> 6,
-                " "=> 7,
-                "m~n"=> 8)
+    doc = Dict(
+        "foo" => ["bar", "baz"],
+        ""=> 0,
+        "a/b"=> 1,
+        "c%d"=> 2,
+        "e^f"=> 3,
+        "g|h"=> 4,
+        "i\\j"=> 5,
+        "k\"l"=> 6,
+        " "=> 7,
+        "m~n"=> 8,
+    )
 
     @test doc[j"#"] == doc
     @test doc[j"#/foo"] == ["bar", "baz"]
@@ -72,13 +78,11 @@ end
 end
 
 @testset "WrongInputTests" begin
-
     @test_throws ArgumentError JSONPointer.Pointer("some/thing")
 
     doc = [0, 1, 2]
     @test_throws ArgumentError doc[j"/a"]
     @test_throws BoundsError doc[j"/10"]
-
 end
 
 @testset "JSONPointer Advanced" begin
@@ -110,7 +114,6 @@ end
     data = OrderedDict(p1 => "This", p2 => "Is my Data")
     @test data[p1] == "This"
     @test data[p2] == "Is my Data"
-
 end
 
 @testset "access deep nested object" begin
@@ -150,7 +153,7 @@ end
     @test_broken get(data, j"/1", missing) |> ismissing
 end
 
-@testset "grow obejct and array" begin
+@testset "grow object and array" begin
     d = Dict(j"/a" => Dict())
     d[j"/a/b"] = []
     d[j"/a/b/2"] = 1
