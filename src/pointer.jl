@@ -93,13 +93,9 @@ Provide appropriate value for 'T'.
 If user wants different null value for 'T' override 'null_value(::Type{T})' method.
 """
 null_value(p::Pointer) = null_value(eltype(p))
-
 null_value(::Type{T}) where {T} = missing
-
 null_value(::Type{<:AbstractArray{T}}) where {T <: Real} = T[]
-
 null_value(::Type{<:AbstractArray{T}}) where {T <: AbstractString} = T[]
-
 null_value(::Any) = Any[]
 
 # This code block needs some explaining.
@@ -119,6 +115,7 @@ for T in (Dict, OrderedCollections.OrderedDict)
         function $T{K,V}(kv::Pair{<:Pointer,V}...) where {V, K<:Pointer}
             $T{String,Any}()
         end
+        _new_container(::$T) = $T{String, Any}()
 
         Base.haskey(dict::$T, p::Pointer) = haskey_by_pointer(dict, p)
 
@@ -199,50 +196,44 @@ function get_by_pointer(collection, p::Pointer, default)
     return default
 end
 
+_convert_v(v::U, ::Pointer{U}) where {U} = v
+function _convert_v(v::V, p::Pointer{U}) where {U, V}
+    v = ismissing(v) ? null_value(p) : v
+    try
+        return convert(eltype(p), v)
+    catch
+        msg = isa(v, Array) ? "Vector" : "Any"
+        error(
+            "$(v) is not valid value for $(p) use '::$(msg)' if you don't " *
+            "need static type."
+        )
+    end
+end
+
+_new_data(::Any, n::Integer) = Vector{Any}(missing, n)
+_new_data(::Any, ::Any) = OrderedCollections.OrderedDict{String, Any}()
+_new_data(::AbstractDict, n::Integer) = Vector{Any}(missing, n)
+_new_data(x::AbstractDict, ::Any) = _new_container(x)
+
+_prep_prev(prev::Array, k::Integer) = grow_array!(prev, k)
+_prep_prev(::Array, k) = throw(MethodError(setindex!, k))
+_prep_prev(::Any, k::Integer) = throw(MethodError(setindex!, k))
+function _prep_prev(prev::Any, k)
+    if !haskey(prev, k)
+        setindex!(prev, missing, k)
+    end
+end
+
 function setindex_by_pointer!(
     collection::T, v, p::Pointer{U}
 ) where {T <: AbstractDict, U}
-    v = ismissing(v) ? null_value(p) : v
-    if !isa(v, U) &&
-        try
-            v = convert(eltype(p), v)
-        catch e
-            msg = isa(v, Array) ? "Vector" : "Any"
-            error("$v is not valid value for $p use '::$msg' if you don't need static type")
-            throw(e)
-        end
-    end
+    v = _convert_v(v, p)
     prev = collection
-    @inbounds for (i, k) in enumerate(p.token)
-        if typeof(prev) <: AbstractDict
-            DT = typeof(prev)
-        else
-            DT = OrderedCollections.OrderedDict{String, Any}
-        end
-
-        if isa(prev, Array)
-            if !isa(k, Integer)
-                throw(MethodError(setindex!, k))
-            end
-            grow_array!(prev, k)
-        else
-            if isa(k, Integer)
-                throw(MethodError(setindex!, k))
-            end
-            if !haskey(prev, k)
-                setindex!(prev, missing, k)
-            end
-        end
+    for (i, k) in enumerate(p.token)
+        _prep_prev(prev, k)
         if i < length(p)
-            tmp = prev[k]
-            if ismissing(tmp)
-                next_key = p.token[i+1]
-                if isa(next_key, Integer)
-                    new_data = Array{Any,1}(missing, next_key)
-                else
-                    new_data = DT(next_key => missing)
-                end
-                setindex!(prev, new_data, k)
+            if ismissing(prev[k])
+                setindex!(prev, _new_data(prev, p.token[i + 1]), k)
             end
             prev = prev[k]
         end
@@ -263,6 +254,7 @@ function grow_array!(arr::Array{T, N}, target_size::Integer) where {T, N}
 end
 
 Base.length(x::Pointer) = length(x.token)
+
 Base.eltype(::Pointer{T}) where {T} = T
 
 function Base.show(io::IO, x::Pointer{T}) where {T}
