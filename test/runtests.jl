@@ -2,7 +2,7 @@ using Test
 using JSONPointer
 using OrderedCollections
 
-@testset "Basic Tests" begin 
+@testset "Basic Tests" begin
     doc = Dict("foo" => ["bar", "baz"],
                 ""=> 0,
                 "a/b"=> 1,
@@ -28,10 +28,10 @@ using OrderedCollections
         @test doc[j"/ "] == 7
         @test doc[j"/m~0n"] == 8
 
-        for k in (j"", 
-                  j"/foo", 
-                  j"/foo/1", 
-                  j"/", 
+        for k in (j"",
+                  j"/foo",
+                  j"/foo/1",
+                  j"/",
                   j"/a~1b",
                   j"/c%d",
                   j"/e^f",
@@ -44,7 +44,7 @@ using OrderedCollections
         end
 end
 
-@testset "URI Fragment Tests" begin 
+@testset "URI Fragment Tests" begin
     doc = Dict("foo" => ["bar", "baz"],
                 ""=> 0,
                 "a/b"=> 1,
@@ -71,7 +71,7 @@ end
     @test doc[j"#/m~0n"] == 8
 end
 
-@testset "WrongInputTests" begin 
+@testset "WrongInputTests" begin
 
     @test_throws ArgumentError JSONPointer.Pointer("some/thing")
 
@@ -92,7 +92,7 @@ end
     @test eltype(c) <: Array{Float64, 1}
 end
 
-@testset "construct Dict with JSONPointer" begin 
+@testset "construct Dict with JSONPointer" begin
     p1 = j"/a/1/b"
     p2 = j"/cd/2/ef"
 
@@ -113,7 +113,7 @@ end
 
 end
 
-@testset "access deep nested object" begin 
+@testset "access deep nested object" begin
     data = [Dict("a" => 10)]
     @test data[j"/1/a"] == 10
 
@@ -121,7 +121,7 @@ end
     data = Dict(p1 => "sooo deep")
     @test data[p1] == "sooo deep"
     @test get(data, p1, missing) == "sooo deep"
-    
+
     @test haskey(data, j"/a/b/c")
     @test haskey(data, j"/a/b/c/d")
     @test haskey(data, j"/a/b/c/d/e/f/g/1")
@@ -132,7 +132,7 @@ end
     @test isa(data[j"/a/b/c/d/e"], AbstractDict)
     @test isa(data[j"/a/b/c/d/e/f/g"], Array)
     @test ismissing(data[j"/a/b/c/d/e/f/g/1/1"])
-    
+
     @test get(data, j"/a/f", missing) |> ismissing
     @test get(data, j"/a/b/c/d/e/f/g/5", 10000) == 10000
 
@@ -150,26 +150,26 @@ end
     @test_broken get(data, j"/1", missing) |> ismissing
 end
 
-@testset "grow obejct and array" begin 
+@testset "grow obejct and array" begin
     d = Dict(j"/a" => Dict())
     d[j"/a/b"] = []
     d[j"/a/b/2"] = 1
-    d[j"/a/b/5"] = 2 
-    @test_throws Exception d[j"/a/5"] = "something" 
-    @test_throws Exception d[j"/a/b/gd"] = "nothing" 
+    d[j"/a/b/5"] = 2
+    @test_throws Exception d[j"/a/5"] = "something"
+    @test_throws Exception d[j"/a/b/gd"] = "nothing"
 
-    @test isa(d[j"/a/b"], Array) 
-    @test isa(d[j"/a/b/1"], Missing) 
+    @test isa(d[j"/a/b"], Array)
+    @test isa(d[j"/a/b/1"], Missing)
 end
 
-@testset "Enforce type on JSONPointer" begin 
+@testset "Enforce type on JSONPointer" begin
     p1 = j"/a/1::String"
     p2 = j"/a/2::Int"
 
     data = Dict(p1 =>"this", p2 => 20)
     @test data[p1] == "this"
     @test data[p2] == 20
-   
+
     @test_throws ErrorException data[p1] = 20
     @test_throws ErrorException data[p2] = "this"
 
@@ -190,7 +190,7 @@ end
     @test d[p3] == JSONPointer.null_value(p3)
 
     # TODO User Defined type
-    struct Foo 
+    struct Foo
     end
     # @test_broken j"/foo::Foo"
 
@@ -207,6 +207,6 @@ end
     @test d[p2] == 2
     @test d["559"] == 2
 
-    @test d[p3] == 3 
+    @test d[p3] == 3
     @test isa(d["900"], Array)
 end

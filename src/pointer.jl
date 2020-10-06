@@ -1,7 +1,7 @@
 const TOKEN_PREFIX = '/'
 
-macro j_str(token) 
-    Pointer(token) 
+macro j_str(token)
+    Pointer(token)
 end
 
 """
@@ -10,10 +10,10 @@ end
 A JSON Pointer is a Unicode string containing a sequence of zero or more reference tokens, each prefixed
 by a '/' (%x2F) character.
 
-Follows IETF JavaScript Object Notation (JSON) Pointer https://tools.ietf.org/html/rfc6901 
+Follows IETF JavaScript Object Notation (JSON) Pointer https://tools.ietf.org/html/rfc6901
 
-- Index numbers starts from '1' instead of '0'  
-- User can declare type with '::T' notation at the end 
+- Index numbers starts from '1' instead of '0'
+- User can declare type with '::T' notation at the end
 
 # Arguments
 - `shift_index` : shift given index by 1 for compatibility with original JSONPointer
@@ -29,14 +29,14 @@ struct Pointer{T}
             token = token[2:end]
             token = unescape_jpath(token)
         end
-        
+
         if isempty(token)
             return Pointer{Nothing}(tuple(""))
         end
-        if !startswith(token, TOKEN_PREFIX) 
+        if !startswith(token, TOKEN_PREFIX)
             throw(ArgumentError("JSONPointer must starts with '$TOKEN_PREFIX' prefix"))
         end
-        
+
         T = Any
         jk = convert(Array{Any, 1}, split(chop(token; head=1, tail=0), TOKEN_PREFIX))
         if occursin("::", jk[end])
@@ -46,22 +46,22 @@ struct Pointer{T}
         end
         @inbounds for i in 1:length(jk)
             if occursin(r"^\d+$", jk[i]) # index of a array
-                jk[i] = if shift_index 
+                jk[i] = if shift_index
                     parse(Int, string(jk[i])) + 1
-                else 
+                else
                     parse(Int, string(jk[i]))
                 end
-                
-                if iszero(jk[i]) 
+
+                if iszero(jk[i])
                     throw(ArgumentError("Julia uses 1-based indexing, use '1' instead of '0'"))
                 end
             elseif occursin(r"^\\\d+$", jk[i]) # literal string for a number
                 jk[i] = chop(jk[i]; head=1, tail=0)
-            elseif occursin("~", jk[i]) 
+            elseif occursin("~", jk[i])
                 jk[i] = replace(replace(jk[i], "~0" => "~"), "~1" => "/")
             end
         end
-        new{T}(tuple(jk...)) 
+        new{T}(tuple(jk...))
     end
 end
 
@@ -82,26 +82,26 @@ function unescape_jpath(raw::AbstractString)
 end
 
 
-""" 
+"""
     null_value(p::Pointer{T}) where T
     null_value(::Type{T}) where T
 
 provide appropriate value for 'T'
 'Real' return 'zero(T)' and 'AbstractString' returns '""'
 
-If user wants different null value for 'T' override 'null_value(::Type{T})' method 
+If user wants different null value for 'T' override 'null_value(::Type{T})' method
 
 """
 null_value(p::Pointer) = null_value(eltype(p))
-null_value(::Type{T}) where T = missing 
+null_value(::Type{T}) where T = missing
 function null_value(::Type{T}) where T <: Array
-    eltype(T) <: Real ? eltype(T)[] : 
+    eltype(T) <: Real ? eltype(T)[] :
     eltype(T) <: AbstractString ? eltype(T)[] :
     Any[]
 end
 
 for T in (Dict, OrderedDict)
-    @eval begin 
+    @eval begin
         function $T{K,V}(kv::Pair{<:Pointer,V}...) where K<:Pointer where V
             $T{String,Any}()
         end
@@ -125,13 +125,13 @@ function Base.unique(arr::Array{Pointer, N}) where N
 
     pointers = getfield.(arr, :token)
     if allunique(pointers)
-        return out 
-    end 
+        return out
+    end
 
     delete_target = Int[]
-    @inbounds for p in pointers 
+    @inbounds for p in pointers
         indicies = findall(el -> el == p, pointers)
-        if length(indicies) > 1 
+        if length(indicies) > 1
             append!(delete_target, indicies[1:end-1])
         end
     end
@@ -147,8 +147,8 @@ function haskey_by_pointer(collection, p::Pointer)::Bool
         if haskey_by_pointer(val, k)
             val = getindex(val, k)
         else
-            b = false 
-            break 
+            b = false
+            break
         end
     end
     return b
@@ -161,7 +161,7 @@ function haskey_by_pointer(collection, k)::Bool
                 b = true
             end
         end
-    else         
+    else
         if !isa(k, Integer)
             if haskey(collection, k)
                 b = true
@@ -174,26 +174,26 @@ end
 function getindex_by_pointer(collection, p::Pointer{Nothing})
     collection
 end
-function getindex_by_pointer(collection, p::Pointer)    
+function getindex_by_pointer(collection, p::Pointer)
     getindex_by_pointer(collection, p.token)
 end
 
-function getindex_by_pointer(collection, tokens::Tuple{<:Any})    
+function getindex_by_pointer(collection, tokens::Tuple{<:Any})
     getindex(collection, tokens[1])
 end
-function getindex_by_pointer(collection, tokens::Tuple{<:Any, <:Any})    
+function getindex_by_pointer(collection, tokens::Tuple{<:Any, <:Any})
     getindex(getindex(collection, tokens[1]), tokens[2])
 end
-function getindex_by_pointer(collection, tokens::Tuple{<:Any, <:Any, <:Any})    
+function getindex_by_pointer(collection, tokens::Tuple{<:Any, <:Any, <:Any})
     getindex(getindex(getindex(collection, tokens[1]), tokens[2]), tokens[3])
 end
-function getindex_by_pointer(collection, tokens::Tuple{<:Any, <:Any, <:Any, <:Any})    
+function getindex_by_pointer(collection, tokens::Tuple{<:Any, <:Any, <:Any, <:Any})
     getindex(getindex(getindex(getindex(collection, tokens[1]), tokens[2]), tokens[3]), tokens[4])
 end
-function getindex_by_pointer(collection, tokens::Tuple{<:Any, <:Any, <:Any, <:Any, <:Any})    
+function getindex_by_pointer(collection, tokens::Tuple{<:Any, <:Any, <:Any, <:Any, <:Any})
     getindex(getindex(getindex(getindex(getindex(collection, tokens[1]), tokens[2]), tokens[3]), tokens[4]), tokens[5])
 end
-function getindex_by_pointer(collection, tokens::Tuple{<:Any, <:Any, <:Any, <:Any, <:Any, <:Any})    
+function getindex_by_pointer(collection, tokens::Tuple{<:Any, <:Any, <:Any, <:Any, <:Any, <:Any})
     getindex(getindex(getindex(getindex(getindex(getindex(collection, tokens[1]), tokens[2]), tokens[3]), tokens[4]), tokens[5]), tokens[6])
 end
 function getindex_by_pointer(collection, tokens::Tuple)
@@ -208,17 +208,17 @@ end
 function get_by_pointer(collection, p::Pointer, default)
     if haskey_by_pointer(collection, p)
         getindex_by_pointer(collection, p)
-    else 
+    else
         default
     end
 end
 
 function setindex_by_pointer!(collection::T, v, p::Pointer{U}) where {T <: AbstractDict, U}
     v = ismissing(v) ? null_value(p) : v
-    if !isa(v, U) && 
-        try 
+    if !isa(v, U) &&
+        try
             v = convert(eltype(p), v)
-        catch e 
+        catch e
             msg = isa(v, Array) ? "Vector" : "Any"
             error("$v is not valid value for $p use '::$msg' if you don't need static type")
             throw(e)
@@ -229,16 +229,16 @@ function setindex_by_pointer!(collection::T, v, p::Pointer{U}) where {T <: Abstr
     @inbounds for (i, k) in enumerate(p.token)
         if typeof(prev) <: AbstractDict
             DT = typeof(prev)
-        else 
+        else
             DT = OrderedDict{String, Any}
         end
 
         if isa(prev, Array)
             if !isa(k, Integer)
                 throw(MethodError(setindex!, k))
-            end 
+            end
             grow_array!(prev, k)
-        else 
+        else
             if isa(k, Integer)
                 throw(MethodError(setindex!, k))
             end
@@ -247,13 +247,13 @@ function setindex_by_pointer!(collection::T, v, p::Pointer{U}) where {T <: Abstr
             end
         end
 
-        if i < length(p) 
+        if i < length(p)
             tmp = getindex(prev, k)
             if ismissing(tmp)
                 next_key = p.token[i+1]
                 if isa(next_key, Integer)
                     new_data = Array{Any,1}(missing, next_key)
-                else 
+                else
                     new_data = DT(next_key => missing)
                 end
                 setindex!(prev, new_data, k)
@@ -264,18 +264,18 @@ function setindex_by_pointer!(collection::T, v, p::Pointer{U}) where {T <: Abstr
     setindex!(prev, v, p.token[end])
 end
 
-function grow_array!(arr::Array{T, N}, target_size) where T where N 
-    x = target_size - length(arr) 
-    if x > 0 
-        if T <: Real 
+function grow_array!(arr::Array{T, N}, target_size) where T where N
+    x = target_size - length(arr)
+    if x > 0
+        if T <: Real
             new_arr = similar(arr, x)
             new_arr .= zero(T)
-        elseif T == Any 
+        elseif T == Any
             new_arr = similar(arr, x)
-            new_arr .= missing 
-        else 
+            new_arr .= missing
+        else
             new_arr = Array{Union{T, Missing}}(undef, x)
-            new_arr .= missing 
+            new_arr .= missing
         end
         append!(arr, new_arr)
     end
@@ -286,7 +286,7 @@ Base.length(x::Pointer) = length(x.token)
 Base.eltype(x::Pointer{T}) where T = T
 
 function Base.show(io::IO, x::Pointer{T}) where T
-    print(io, 
+    print(io,
     "JSONPointer{", T, "}(\"/", join(x.token, "/"), "\")")
 end
 
