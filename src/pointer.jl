@@ -111,10 +111,11 @@ null_value(::Any) = Any[]
 # subtype that we support :(
 for T in (Dict, OrderedCollections.OrderedDict)
     @eval begin
-        # TODO(odow): remove this method?
-        function $T{K,V}(kv::Pair{<:Pointer,V}...) where {V, K<:Pointer}
-            $T{String,Any}()
+        # This method is used when creating new dictionaries from JSON pointers.
+        function $T{K, V}(kv::Pair{<:Pointer, V}...) where {V, K<:Pointer}
+            return $T{String, Any}()
         end
+
         _new_container(::$T) = $T{String, Any}()
 
         Base.haskey(dict::$T, p::Pointer) = haskey_by_pointer(dict, p)
