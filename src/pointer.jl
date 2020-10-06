@@ -4,64 +4,71 @@ macro j_str(token)
     Pointer(token)
 end
 
+# TODO(odow): is there a better way to do this not using eval?
+function _last_element_to_type!(jk)
+    if !occursin("::", jk[end])
+        return Any
+    end
+    x = split(jk[end], "::")
+    jk[end] = String(x[1])
+    return eval(Meta.parse(x[2]))
+end
+
 """
-    Pointer(token)
+Pointer(token::AbstractString; shift_index::Bool = false)
 
-A JSON Pointer is a Unicode string containing a sequence of zero or more reference tokens, each prefixed
-by a '/' (%x2F) character.
+A JSON Pointer is a Unicode string containing a sequence of zero or more
+reference tokens, each prefixed by a '/' (%x2F) character.
 
-Follows IETF JavaScript Object Notation (JSON) Pointer https://tools.ietf.org/html/rfc6901
+Follows IETF JavaScript Object Notation (JSON) Pointer https://tools.ietf.org/html/rfc6901.
+
+## Arguments
+
+- `shift_index` : shift given index by 1 for compatibility with original JSONPointer.
+
+## Non-standard extensions
 
 - Index numbers starts from '1' instead of '0'
-- User can declare type with '::T' notation at the end
-
-# Arguments
-- `shift_index` : shift given index by 1 for compatibility with original JSONPointer
-
+- User can declare type with '::T' notation at the end. For example `/foo::Int`
 """
 struct Pointer{T}
-    token::Tuple
+    token::Vector{Union{String, Int}}
 
-    Pointer{T}(token::Tuple) where T = new{T}(token)
-    function Pointer(token::AbstractString; shift_index = false)
-        # URI Fragment
+    function Pointer(token::AbstractString; shift_index::Bool = false)
         if startswith(token, "#")
             token = token[2:end]
             token = unescape_jpath(token)
         end
-
         if isempty(token)
-            return Pointer{Nothing}(tuple(""))
+            return new{Nothing}([""])
         end
         if !startswith(token, TOKEN_PREFIX)
             throw(ArgumentError("JSONPointer must starts with '$TOKEN_PREFIX' prefix"))
         end
-
-        T = Any
-        jk = convert(Array{Any, 1}, split(chop(token; head=1, tail=0), TOKEN_PREFIX))
-        if occursin("::", jk[end])
-            x = split(jk[end], "::")
-            jk[end] = x[1]
-            T = (x[2] == "Vector" ? "Vector{Any}" : x[2]) |> Meta.parse |> eval
+        jk = convert(
+            Vector{Union{String, Int}},
+            String.(split(token, TOKEN_PREFIX; keepempty = false)),
+        )
+        if length(jk) == 0
+            return new{Any}([""])
         end
-        @inbounds for i in 1:length(jk)
+        T = _last_element_to_type!(jk)
+        for i in 1:length(jk)
             if occursin(r"^\d+$", jk[i]) # index of a array
-                jk[i] = if shift_index
-                    parse(Int, string(jk[i])) + 1
-                else
-                    parse(Int, string(jk[i]))
+                jk[i] = parse(Int, string(jk[i]))
+                if shift_index
+                    jk[i] += 1
                 end
-
                 if iszero(jk[i])
                     throw(ArgumentError("Julia uses 1-based indexing, use '1' instead of '0'"))
                 end
             elseif occursin(r"^\\\d+$", jk[i]) # literal string for a number
-                jk[i] = chop(jk[i]; head=1, tail=0)
+                jk[i] = String(chop(jk[i]; head = 1, tail = 0))
             elseif occursin("~", jk[i])
                 jk[i] = replace(replace(jk[i], "~0" => "~"), "~1" => "/")
             end
         end
-        return new{T}(tuple(jk...))
+        return new{T}(jk)
     end
 end
 
@@ -183,7 +190,7 @@ function getindex_by_pointer(collection, p::Pointer)
     return getindex_by_pointer(collection, p.token)
 end
 
-function getindex_by_pointer(collection, tokens::Tuple)
+function getindex_by_pointer(collection, tokens::Vector{Union{String, Int}})
     for token in tokens
         collection = collection[token]
     end

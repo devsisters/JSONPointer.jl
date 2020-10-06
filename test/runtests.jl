@@ -90,7 +90,7 @@ end
     b = j"/a/2/e::Vector{Int}"
     c = j"/a/2/f::Vector{Float64}"
 
-    @test a.token == ("a", 2, "d")
+    @test a.token == ["a", 2, "d"]
     @test eltype(a) <: Array
     @test eltype(b) <: Array{Int, 1}
     @test eltype(c) <: Array{Float64, 1}
