@@ -100,7 +100,7 @@ function null_value(::Type{T}) where T <: Array
     Any[]
 end
 
-for T in (Dict, OrderedDict)
+for T in (Dict, OrderedCollections.OrderedDict)
     @eval begin
         function $T{K,V}(kv::Pair{<:Pointer,V}...) where K<:Pointer where V
             $T{String,Any}()
@@ -230,7 +230,7 @@ function setindex_by_pointer!(collection::T, v, p::Pointer{U}) where {T <: Abstr
         if typeof(prev) <: AbstractDict
             DT = typeof(prev)
         else
-            DT = OrderedDict{String, Any}
+            DT = OrderedCollections.OrderedDict{String, Any}
         end
 
         if isa(prev, Array)

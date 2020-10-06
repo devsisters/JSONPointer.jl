@@ -1,6 +1,6 @@
 module JSONPointer
 
-using OrderedCollections
+import OrderedCollections
 
 include("pointer.jl")
 
