@@ -4,6 +4,22 @@ macro j_str(token)
     Pointer(token)
 end
 
+"""
+    _unescape_jpath(raw::String)
+
+Transform escaped characters in JPaths back to their original value.
+https://tools.ietf.org/html/rfc6901
+"""
+function _unescape_jpath(raw::AbstractString)
+    m = match(r"%([0-9A-F]{2})", raw)
+    if m !== nothing
+        for c in m.captures
+            raw = replace(raw, "%$(c)" => Char(parse(UInt8, "0x$(c)")))
+        end
+    end
+    return raw
+end
+
 # TODO(odow): is there a better way to do this not using eval?
 function _last_element_to_type!(jk)
     if !occursin("::", jk[end])
@@ -32,72 +48,64 @@ Follows IETF JavaScript Object Notation (JSON) Pointer https://tools.ietf.org/ht
 - User can declare type with '::T' notation at the end. For example `/foo::Int`
 """
 struct Pointer{T}
-    token::Vector{Union{String, Int}}
+    tokens::Vector{Union{String, Int}}
+end
 
-    function Pointer(token::AbstractString; shift_index::Bool = false)
-        if startswith(token, "#")
-            token = token[2:end]
-            token = unescape_jpath(token)
-        end
-        if isempty(token)
-            return new{Nothing}([""])
-        end
-        if !startswith(token, TOKEN_PREFIX)
-            throw(ArgumentError("JSONPointer must starts with '$TOKEN_PREFIX' prefix"))
-        end
-        jk = convert(
-            Vector{Union{String, Int}},
-            String.(split(token, TOKEN_PREFIX; keepempty = false)),
-        )
-        if length(jk) == 0
-            return new{Any}([""])
-        end
-        T = _last_element_to_type!(jk)
-        for i in 1:length(jk)
-            if occursin(r"^\d+$", jk[i]) # index of a array
-                jk[i] = parse(Int, string(jk[i]))
-                if shift_index
-                    jk[i] += 1
-                end
-                if iszero(jk[i])
-                    throw(ArgumentError("Julia uses 1-based indexing, use '1' instead of '0'"))
-                end
-            elseif occursin(r"^\\\d+$", jk[i]) # literal string for a number
-                jk[i] = String(chop(jk[i]; head = 1, tail = 0))
-            elseif occursin("~", jk[i])
-                jk[i] = replace(replace(jk[i], "~0" => "~"), "~1" => "/")
+function Pointer(token_string::AbstractString; shift_index::Bool = false)
+    if startswith(token_string, "#")
+        token_string = _unescape_jpath(token_string[2:end])
+    end
+    if isempty(token_string)
+        return Pointer{Nothing}([""])
+    end
+    if !startswith(token_string, TOKEN_PREFIX)
+        throw(ArgumentError("JSONPointer must starts with '$TOKEN_PREFIX' prefix"))
+    end
+    tokens = convert(
+        Vector{Union{String, Int}},
+        String.(split(token_string, TOKEN_PREFIX; keepempty = false)),
+    )
+    if length(tokens) == 0
+        return Pointer{Any}([""])
+    end
+    T = _last_element_to_type!(tokens)
+    for (i, token) in enumerate(tokens)
+        if occursin(r"^\d+$", token) # index of a array
+            tokens[i] = parse(Int, token)
+            if shift_index
+                tokens[i] += 1
             end
-        end
-        return new{T}(jk)
-    end
-end
-
-"""
-    unescape_jpath(raw::String)
-
-Transform escaped characters in JPaths back to their original value.
-https://tools.ietf.org/html/rfc6901
-"""
-function unescape_jpath(raw::AbstractString)
-    m = match(r"%([0-9A-F]{2})", raw)
-    if m !== nothing
-        for c in m.captures
-            raw = replace(raw, "%$(c)" => Char(parse(UInt8, "0x$(c)")))
+            if iszero(tokens[i])
+                throw(ArgumentError("Julia uses 1-based indexing, use '1' instead of '0'"))
+            end
+        elseif occursin(r"^\\\d+$", token) # literal string for a number
+            tokens[i] = String(chop(token; head = 1, tail = 0))
+        elseif occursin("~", token)
+            tokens[i] = replace(replace(token, "~0" => "~"), "~1" => "/")
         end
     end
-    return raw
+    return Pointer{T}(tokens)
 end
 
+Base.length(x::Pointer) = length(x.tokens)
+
+Base.eltype(::Pointer{T}) where {T} = T
+
+function Base.show(io::IO, x::Pointer{T}) where {T}
+    print(io, "JSONPointer{", T, "}(\"/", join(x.tokens, "/"), "\")")
+end
+
+function Base.show(io::IO, ::Pointer{Nothing})
+    print(io, "JSONPointer{Nothing}(\"\")")
+end
 
 """
     null_value(p::Pointer{T}) where {T}
     null_value(::Type{T}) where {T}
 
-Provide appropriate value for 'T'.
+Provide appropriate null value for 'T'.
 
-'Real' return 'zero(T)' and 'AbstractString' returns '""'
-
-If user wants different null value for 'T' override 'null_value(::Type{T})' method.
+For example, `null_value(Real) = 0` and `null_value(AbstractString) = ""`.
 """
 null_value(p::Pointer) = null_value(eltype(p))
 null_value(::Type{T}) where {T} = missing
@@ -125,84 +133,76 @@ for T in (Dict, OrderedCollections.OrderedDict)
 
         _new_container(::$T) = $T{String, Any}()
 
-        Base.haskey(dict::$T, p::Pointer) = haskey_by_pointer(dict, p)
-
-        Base.getindex(dict::$T, p::Pointer) = getindex_by_pointer(dict, p)
-
-        function Base.setindex!(dict::$T, v, p::Pointer)
-            return setindex_by_pointer!(dict, v, p)
-        end
-
-        function Base.get(dict::$T, p::Pointer, default)
-            return get_by_pointer(dict, p, default)
-        end
+        Base.haskey(dict::$T, p::Pointer) = _haskey(dict, p)
+        Base.getindex(dict::$T, p::Pointer) = _getindex(dict, p)
+        Base.setindex!(dict::$T, v, p::Pointer) = _setindex!(dict, v, p)
+        Base.get(dict::$T, p::Pointer, default) = _get(dict, p, default)
     end
 end
 
-Base.getindex(A::AbstractArray, p::Pointer{Any}) = getindex_by_pointer(A, p)
+Base.getindex(A::AbstractArray, p::Pointer) = _getindex(A, p)
+Base.haskey(A::AbstractArray, p::Pointer) = _haskey(A, p)
 
-Base.haskey(A::AbstractArray, p::Pointer) = getindex_by_pointer(A, p)
+# ==============================================================================
 
-function Base.unique(arr::Array{Pointer, N}) where {N}
-    out = deepcopy(arr)
-    if isempty(arr)
-        return out
-    end
-    pointers = getfield.(arr, :token)
-    if allunique(pointers)
-        return out
-    end
-    delete_target = Int[]
-    @inbounds for p in pointers
-        indicies = findall(el -> el == p, pointers)
-        if length(indicies) > 1
-            append!(delete_target, indicies[1:end-1])
-        end
-    end
-    deleteat!(out, unique(delete_target))
+_checked_get(collection::AbstractArray, token::Int) = collection[token]
+
+_checked_get(collection::AbstractDict, token::String) = collection[token]
+
+function _checked_get(collection, token)
+    error(
+        "JSON pointer does not match the data-structure. I tried (and " *
+        "failed) to index $(collection) with the key: $(token)"
+    )
 end
 
-haskey_by_pointer(collection, p::Pointer{Nothing}) = true
+# ==============================================================================
 
-function haskey_by_pointer(collection, p::Pointer)
-    for k in p.token
-        if !haskey_by_pointer(collection, k)
+_haskey(::Any, ::Pointer{Nothing}) = true
+
+function _haskey(collection, p::Pointer)
+    for token in p.tokens
+        if !_haskey(collection, token)
             return false
         end
-        collection = collection[k]
+        collection = _checked_get(collection, token)
     end
     return true
 end
 
-haskey_by_pointer(collection, k) = haskey(collection, k)
+_haskey(collection::AbstractDict, token::String) = haskey(collection, token)
 
-haskey_by_pointer(collection::AbstractArray, k) = false
-
-function haskey_by_pointer(collection::AbstractArray, k::Integer)
-    return 1 <= k <= length(collection)
+function _haskey(collection::AbstractArray, token::Int)
+    return 1 <= token <= length(collection)
 end
 
-function getindex_by_pointer(collection, ::Pointer{Nothing})
-    return collection
+_haskey(::Any, ::Any) = false
+
+# ==============================================================================
+
+_getindex(collection, ::Pointer{Nothing}) = collection
+
+function _getindex(collection, p::Pointer)
+    return _getindex(collection, p.tokens)
 end
 
-function getindex_by_pointer(collection, p::Pointer)
-    return getindex_by_pointer(collection, p.token)
-end
-
-function getindex_by_pointer(collection, tokens::Vector{Union{String, Int}})
+function _getindex(collection, tokens::Vector{Union{String, Int}})
     for token in tokens
-        collection = collection[token]
+        collection = _checked_get(collection, token)
     end
     return collection
 end
 
-function get_by_pointer(collection, p::Pointer, default)
-    if haskey_by_pointer(collection, p)
-        return getindex_by_pointer(collection, p)
+# ==============================================================================
+
+function _get(collection, p::Pointer, default)
+    if _haskey(collection, p)
+        return _getindex(collection, p)
     end
     return default
 end
+
+# ==============================================================================
 
 _convert_v(v::U, ::Pointer{U}) where {U} = v
 function _convert_v(v::V, p::Pointer{U}) where {U, V}
@@ -232,21 +232,21 @@ function _prep_prev(prev::Any, k)
     end
 end
 
-function setindex_by_pointer!(
-    collection::T, v, p::Pointer{U}
-) where {T <: AbstractDict, U}
+function _setindex!(
+    collection::AbstractDict, v, p::Pointer{U}
+) where {U}
     v = _convert_v(v, p)
     prev = collection
-    for (i, k) in enumerate(p.token)
-        _prep_prev(prev, k)
+    for (i, token) in enumerate(p.tokens)
+        _prep_prev(prev, token)
         if i < length(p)
-            if ismissing(prev[k])
-                setindex!(prev, _new_data(prev, p.token[i + 1]), k)
+            if ismissing(_checked_get(prev, token))
+                setindex!(prev, _new_data(prev, p.tokens[i + 1]), token)
             end
-            prev = prev[k]
+            prev = _checked_get(prev, token)
         end
     end
-    return setindex!(prev, v, p.token[end])
+    return setindex!(prev, v, p.tokens[end])
 end
 
 _new_arr(::Type{T}, x::Int) where {T <: Real} = zeros(T, x)
@@ -259,16 +259,4 @@ function grow_array!(arr::Array{T, N}, target_size::Integer) where {T, N}
         append!(arr, _new_arr(T, x))
     end
     return arr
-end
-
-Base.length(x::Pointer) = length(x.token)
-
-Base.eltype(::Pointer{T}) where {T} = T
-
-function Base.show(io::IO, x::Pointer{T}) where {T}
-    print(io, "JSONPointer{", T, "}(\"/", join(x.token, "/"), "\")")
-end
-
-function Base.show(io::IO, ::Pointer{Nothing})
-    print(io, "JSONPointer{Nothing}(\"\")")
 end

@@ -79,9 +79,14 @@ end
 
 @testset "WrongInputTests" begin
     @test_throws ArgumentError JSONPointer.Pointer("some/thing")
-
     doc = [0, 1, 2]
-    @test_throws ArgumentError doc[j"/a"]
+    @test_throws(
+        ErrorException(
+            "JSON pointer does not match the data-structure. I tried (and " *
+            "failed) to index $(doc) with the key: a"
+        ),
+        doc[j"/a"],
+    )
     @test_throws BoundsError doc[j"/10"]
 end
 
@@ -90,7 +95,7 @@ end
     b = j"/a/2/e::Vector{Int}"
     c = j"/a/2/f::Vector{Float64}"
 
-    @test a.token == ["a", 2, "d"]
+    @test a.tokens == ["a", 2, "d"]
     @test eltype(a) <: Array
     @test eltype(b) <: Array{Int, 1}
     @test eltype(c) <: Array{Float64, 1}
