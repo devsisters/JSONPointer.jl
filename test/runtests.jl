@@ -218,3 +218,11 @@ end
     @test d[p3] == 3
     @test isa(d["900"], Array)
 end
+
+@testset "unique" begin
+    p = [j"/a", j"/b", j"/a"]
+    up = unique(p)
+    @test length(up) == 2
+    @test j"/a" in up
+    @test j"/b" in up
+end
