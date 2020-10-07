@@ -1,0 +1,7 @@
+﻿<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<coverage version="1.0" date="2020-10-07_14-28-49" tag="23_293603883">
+  <assembly name="Default">
+    <class name="src/JSONPointer.jl" coveredlines="1" coverablelines="1" totallines="9" coveredbranches="0" totalbranches="0" />
+    <class name="src/pointer.jl" coveredlines="93" coverablelines="104" totallines="262" coveredbranches="0" totalbranches="0" />
+  </assembly>
+</coverage>
