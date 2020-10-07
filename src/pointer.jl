@@ -245,7 +245,7 @@ function _convert_v(v::V, p::Pointer{U}) where {U, V}
     end
 end
 
-function _add_element_if_needed(prev::Vector{T}, k::Integer) where {T}
+function _add_element_if_needed(prev::AbstractVector{T}, k::Int) where {T}
     x = k - length(prev)
     if x > 0
         append!(prev, [_null_value(T) for _ = 1:x])
@@ -261,11 +261,15 @@ function _add_element_if_needed(
     end
 end
 
-_add_element_if_needed(::Any, k) = throw(MethodError(setindex!, k))
+function _add_element_if_needed(collection, token)
+    error(
+        "JSON pointer does not match the data-structure. I tried (and " *
+        "failed) to set $(collection) at the index: $(token)"
+    )
+end
 
-_new_data(::AbstractVector, n::Int) = Vector{Any}(missing, n)
+_new_data(::Any, n::Int) = Vector{Any}(missing, n)
 _new_data(::AbstractVector, ::String) = OrderedCollections.OrderedDict{String, Any}()
-_new_data(::AbstractDict, n::Int) = Vector{Any}(missing, n)
 _new_data(x::AbstractDict, ::String) = _new_container(x)
 
 function _setindex!(collection::AbstractDict, v, p::Pointer)
@@ -276,7 +280,7 @@ function _setindex!(collection::AbstractDict, v, p::Pointer)
             if ismissing(prev[token])
                 prev[token] = _new_data(prev, p.tokens[i + 1])
             end
-            prev = _checked_get(prev, token)
+            prev = prev[token]
         end
     end
     prev[p.tokens[end]] = _convert_v(v, p)
