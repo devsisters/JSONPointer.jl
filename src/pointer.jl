@@ -20,18 +20,35 @@ function _unescape_jpath(raw::AbstractString)
     return raw
 end
 
-# TODO(odow): is there a better way to do this not using eval?
 function _last_element_to_type!(jk)
     if !occursin("::", jk[end])
         return Any
     end
     x = split(jk[end], "::")
     jk[end] = String(x[1])
-    return eval(Meta.parse(x[2]))
+    if x[2] == "string"
+        return String
+    elseif x[2] == "number"
+        return Union{Int, Float64}
+    elseif x[2] == "object"
+        return Dict{String, Any}
+    elseif x[2] == "array"
+        return Vector{Any}
+    elseif x[2] == "boolean"
+        return Bool
+    elseif x[2] == "null"
+        return Nothing
+    else
+        error(
+            "You specified a type that JSON doesn't recognize! Instead of " *
+            "`::$(x[2])`, you must use one of `::string`, `::number`, " *
+            "`::object`, `::array`, `::boolean`, or `::null`."
+        )
+    end
 end
 
 """
-Pointer(token::AbstractString; shift_index::Bool = false)
+    Pointer(token::AbstractString; shift_index::Bool = false)
 
 A JSON Pointer is a Unicode string containing a sequence of zero or more
 reference tokens, each prefixed by a '/' (%x2F) character.
@@ -40,12 +57,27 @@ Follows IETF JavaScript Object Notation (JSON) Pointer https://tools.ietf.org/ht
 
 ## Arguments
 
-- `shift_index` : shift given index by 1 for compatibility with original JSONPointer.
+- `shift_index`: shift given index by 1 for compatibility with original JSONPointer.
 
 ## Non-standard extensions
 
-- Index numbers starts from '1' instead of '0'
-- User can declare type with '::T' notation at the end. For example `/foo::Int`
+- Index numbers starts from `1` instead of `0`
+
+- User can declare type with '::T' notation at the end. For example
+  `/foo::string`. The type `T` must be one of the six types supported by JSON:
+  * `::string`
+  * `::number`
+  * `::object`
+  * `::array`
+  * `::boolean`
+  * `::null`
+
+## Examples
+
+    Pointer("/a")
+    Pointer("/a/3")
+    Pointer("/a/b/c::number")
+    Pointer("/a/0/c::object"; shift_index = true)
 """
 struct Pointer{T}
     tokens::Vector{Union{String, Int}}
@@ -98,20 +130,6 @@ end
 function Base.show(io::IO, ::Pointer{Nothing})
     print(io, "JSONPointer{Nothing}(\"\")")
 end
-
-"""
-    null_value(p::Pointer{T}) where {T}
-    null_value(::Type{T}) where {T}
-
-Provide appropriate null value for 'T'.
-
-For example, `null_value(Real) = 0` and `null_value(AbstractString) = ""`.
-"""
-null_value(p::Pointer) = null_value(eltype(p))
-null_value(::Type{T}) where {T} = missing
-null_value(::Type{<:AbstractArray{T}}) where {T <: Real} = T[]
-null_value(::Type{<:AbstractArray{T}}) where {T <: AbstractString} = T[]
-null_value(::Any) = Any[]
 
 # This code block needs some explaining.
 #
@@ -204,59 +222,64 @@ end
 
 # ==============================================================================
 
+_null_value(p::Pointer) = _null_value(eltype(p))
+_null_value(::Type{String}) = ""
+_null_value(::Type{<:Real}) = 0
+_null_value(::Type{<:AbstractDict}) = OrderedCollections.OrderedDict{String, Any}()
+_null_value(::Type{<:AbstractVector{T}}) where {T} = T[]
+_null_value(::Type{Bool}) = false
+_null_value(::Type{Nothing}) = nothing
+
+_null_value(::Type{Any}) = missing
+
 _convert_v(v::U, ::Pointer{U}) where {U} = v
 function _convert_v(v::V, p::Pointer{U}) where {U, V}
-    v = ismissing(v) ? null_value(p) : v
+    v = ismissing(v) ? _null_value(p) : v
     try
         return convert(eltype(p), v)
     catch
-        msg = isa(v, Array) ? "Vector" : "Any"
         error(
-            "$(v) is not valid value for $(p) use '::$(msg)' if you don't " *
-            "need static type."
+            "$(v)::$(typeof(v)) is not valid type for $(p). Remove type " *
+            "assertion in the JSON pointer if you don't a need static type."
         )
     end
 end
 
-_new_data(::Any, n::Integer) = Vector{Any}(missing, n)
-_new_data(::Any, ::Any) = OrderedCollections.OrderedDict{String, Any}()
-_new_data(::AbstractDict, n::Integer) = Vector{Any}(missing, n)
-_new_data(x::AbstractDict, ::Any) = _new_container(x)
+function _add_element_if_needed(prev::Vector{T}, k::Integer) where {T}
+    x = k - length(prev)
+    if x > 0
+        append!(prev, [_null_value(T) for _ = 1:x])
+    end
+    return
+end
 
-_prep_prev(prev::Array, k::Integer) = grow_array!(prev, k)
-_prep_prev(::Array, k) = throw(MethodError(setindex!, k))
-_prep_prev(::Any, k::Integer) = throw(MethodError(setindex!, k))
-function _prep_prev(prev::Any, k)
+function _add_element_if_needed(
+    prev::AbstractDict{K, V}, k::String
+) where {K, V}
     if !haskey(prev, k)
-        setindex!(prev, missing, k)
+        prev[k] = _null_value(V)
     end
 end
 
-function _setindex!(
-    collection::AbstractDict, v, p::Pointer{U}
-) where {U}
-    v = _convert_v(v, p)
+_add_element_if_needed(::Any, k) = throw(MethodError(setindex!, k))
+
+_new_data(::AbstractVector, n::Int) = Vector{Any}(missing, n)
+_new_data(::AbstractVector, ::String) = OrderedCollections.OrderedDict{String, Any}()
+_new_data(::AbstractDict, n::Int) = Vector{Any}(missing, n)
+_new_data(x::AbstractDict, ::String) = _new_container(x)
+
+function _setindex!(collection::AbstractDict, v, p::Pointer)
     prev = collection
     for (i, token) in enumerate(p.tokens)
-        _prep_prev(prev, token)
-        if i < length(p)
-            if ismissing(_checked_get(prev, token))
-                setindex!(prev, _new_data(prev, p.tokens[i + 1]), token)
+        _add_element_if_needed(prev, token)
+        if i != length(p)
+            if ismissing(prev[token])
+                prev[token] = _new_data(prev, p.tokens[i + 1])
             end
             prev = _checked_get(prev, token)
         end
     end
-    return setindex!(prev, v, p.tokens[end])
+    prev[p.tokens[end]] = _convert_v(v, p)
+    return v
 end
 
-_new_arr(::Type{T}, x::Int) where {T <: Real} = zeros(T, x)
-_new_arr(::Type{Any}, x::Int) = Vector{Any}(missing, x)
-_new_arr(::Type{T}, x::Int) where {T} = Vector{Union{T, Missing}}(missing, x)
-
-function grow_array!(arr::Array{T, N}, target_size::Integer) where {T, N}
-    x = target_size - length(arr)
-    if x > 0
-        append!(arr, _new_arr(T, x))
-    end
-    return arr
-end
