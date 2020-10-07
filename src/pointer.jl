@@ -1,67 +1,74 @@
 const TOKEN_PREFIX = '/'
 
-macro j_str(token) 
-    Pointer(token) 
+macro j_str(token)
+    Pointer(token)
+end
+
+# TODO(odow): is there a better way to do this not using eval?
+function _last_element_to_type!(jk)
+    if !occursin("::", jk[end])
+        return Any
+    end
+    x = split(jk[end], "::")
+    jk[end] = String(x[1])
+    return eval(Meta.parse(x[2]))
 end
 
 """
-    Pointer(token)
+Pointer(token::AbstractString; shift_index::Bool = false)
 
-A JSON Pointer is a Unicode string containing a sequence of zero or more reference tokens, each prefixed
-by a '/' (%x2F) character.
+A JSON Pointer is a Unicode string containing a sequence of zero or more
+reference tokens, each prefixed by a '/' (%x2F) character.
 
-Follows IETF JavaScript Object Notation (JSON) Pointer https://tools.ietf.org/html/rfc6901 
+Follows IETF JavaScript Object Notation (JSON) Pointer https://tools.ietf.org/html/rfc6901.
 
-- Index numbers starts from '1' instead of '0'  
-- User can declare type with '::T' notation at the end 
+## Arguments
 
-# Arguments
-- `shift_index` : shift given index by 1 for compatibility with original JSONPointer
+- `shift_index` : shift given index by 1 for compatibility with original JSONPointer.
 
+## Non-standard extensions
+
+- Index numbers starts from '1' instead of '0'
+- User can declare type with '::T' notation at the end. For example `/foo::Int`
 """
 struct Pointer{T}
-    token::Tuple
+    token::Vector{Union{String, Int}}
 
-    Pointer{T}(token::Tuple) where T = new{T}(token)
-    function Pointer(token::AbstractString; shift_index = false)
-        # URI Fragment
+    function Pointer(token::AbstractString; shift_index::Bool = false)
         if startswith(token, "#")
             token = token[2:end]
             token = unescape_jpath(token)
         end
-        
         if isempty(token)
-            return Pointer{Nothing}(tuple(""))
+            return new{Nothing}([""])
         end
-        if !startswith(token, TOKEN_PREFIX) 
+        if !startswith(token, TOKEN_PREFIX)
             throw(ArgumentError("JSONPointer must starts with '$TOKEN_PREFIX' prefix"))
         end
-        
-        T = Any
-        jk = convert(Array{Any, 1}, split(chop(token; head=1, tail=0), TOKEN_PREFIX))
-        if occursin("::", jk[end])
-            x = split(jk[end], "::")
-            jk[end] = x[1]
-            T = (x[2] == "Vector" ? "Vector{Any}" : x[2]) |> Meta.parse |> eval
+        jk = convert(
+            Vector{Union{String, Int}},
+            String.(split(token, TOKEN_PREFIX; keepempty = false)),
+        )
+        if length(jk) == 0
+            return new{Any}([""])
         end
-        @inbounds for i in 1:length(jk)
+        T = _last_element_to_type!(jk)
+        for i in 1:length(jk)
             if occursin(r"^\d+$", jk[i]) # index of a array
-                jk[i] = if shift_index 
-                    parse(Int, string(jk[i])) + 1
-                else 
-                    parse(Int, string(jk[i]))
+                jk[i] = parse(Int, string(jk[i]))
+                if shift_index
+                    jk[i] += 1
                 end
-                
-                if iszero(jk[i]) 
+                if iszero(jk[i])
                     throw(ArgumentError("Julia uses 1-based indexing, use '1' instead of '0'"))
                 end
             elseif occursin(r"^\\\d+$", jk[i]) # literal string for a number
-                jk[i] = chop(jk[i]; head=1, tail=0)
-            elseif occursin("~", jk[i]) 
+                jk[i] = String(chop(jk[i]; head = 1, tail = 0))
+            elseif occursin("~", jk[i])
                 jk[i] = replace(replace(jk[i], "~0" => "~"), "~1" => "/")
             end
         end
-        new{T}(tuple(jk...)) 
+        return new{T}(jk)
     end
 end
 
@@ -82,214 +89,186 @@ function unescape_jpath(raw::AbstractString)
 end
 
 
-""" 
-    null_value(p::Pointer{T}) where T
-    null_value(::Type{T}) where T
+"""
+    null_value(p::Pointer{T}) where {T}
+    null_value(::Type{T}) where {T}
 
-provide appropriate value for 'T'
+Provide appropriate value for 'T'.
+
 'Real' return 'zero(T)' and 'AbstractString' returns '""'
 
-If user wants different null value for 'T' override 'null_value(::Type{T})' method 
-
+If user wants different null value for 'T' override 'null_value(::Type{T})' method.
 """
 null_value(p::Pointer) = null_value(eltype(p))
-null_value(::Type{T}) where T = missing 
-function null_value(::Type{T}) where T <: Array
-    eltype(T) <: Real ? eltype(T)[] : 
-    eltype(T) <: AbstractString ? eltype(T)[] :
-    Any[]
-end
+null_value(::Type{T}) where {T} = missing
+null_value(::Type{<:AbstractArray{T}}) where {T <: Real} = T[]
+null_value(::Type{<:AbstractArray{T}}) where {T <: AbstractString} = T[]
+null_value(::Any) = Any[]
 
-for T in (Dict, OrderedDict)
-    @eval begin 
-        function $T{K,V}(kv::Pair{<:Pointer,V}...) where K<:Pointer where V
-            $T{String,Any}()
+# This code block needs some explaining.
+#
+# Ideally, one would define methods like Base.haskey(::AbstractDict, ::Pointer).
+# However, this causes an ambiguity with Base.haskey(::Dict, key), which has a
+# more concrete first argument and a less concrete second argument. We could
+# just define both methods to avoid the ambiguity with Dict, but this would
+# probably break any package which defines an <:AbstractDict and fails to type
+# the second argument to haskey, getindex, etc!
+#
+# To avoid the ambiguity issue, we have to manually encode each AbstractDict
+# subtype that we support :(
+for T in (Dict, OrderedCollections.OrderedDict)
+    @eval begin
+        # This method is used when creating new dictionaries from JSON pointers.
+        function $T{K, V}(kv::Pair{<:Pointer, V}...) where {V, K<:Pointer}
+            return $T{String, Any}()
         end
 
-        Base.haskey(dict::$T{K,V}, p::Pointer) where {K, V} = haskey_by_pointer(dict, p)
-        Base.getindex(dict::$T{K,V}, p::Pointer) where {K, V} = getindex_by_pointer(dict, p)
-        Base.setindex!(dict::$T{K,V}, v, p::Pointer) where {K, V} = setindex_by_pointer!(dict, v, p)
-        Base.get(dict::$T{K,V}, p::Pointer, default) where {K, V} = get_by_pointer(dict, p, default)
+        _new_container(::$T) = $T{String, Any}()
 
-        # Base.setindex!(dict::$T{K,V}, v, p::Pointer) where {K <: Integer, V} = setindex_by_pointer!(dict, v, p)
+        Base.haskey(dict::$T, p::Pointer) = haskey_by_pointer(dict, p)
+
+        Base.getindex(dict::$T, p::Pointer) = getindex_by_pointer(dict, p)
+
+        function Base.setindex!(dict::$T, v, p::Pointer)
+            return setindex_by_pointer!(dict, v, p)
+        end
+
+        function Base.get(dict::$T, p::Pointer, default)
+            return get_by_pointer(dict, p, default)
+        end
     end
 end
+
 Base.getindex(A::AbstractArray, p::Pointer{Any}) = getindex_by_pointer(A, p)
+
 Base.haskey(A::AbstractArray, p::Pointer) = getindex_by_pointer(A, p)
 
-function Base.unique(arr::Array{Pointer, N}) where N
+function Base.unique(arr::Array{Pointer, N}) where {N}
     out = deepcopy(arr)
     if isempty(arr)
         return out
     end
-
     pointers = getfield.(arr, :token)
     if allunique(pointers)
-        return out 
-    end 
-
+        return out
+    end
     delete_target = Int[]
-    @inbounds for p in pointers 
+    @inbounds for p in pointers
         indicies = findall(el -> el == p, pointers)
-        if length(indicies) > 1 
+        if length(indicies) > 1
             append!(delete_target, indicies[1:end-1])
         end
     end
     deleteat!(out, unique(delete_target))
 end
 
-
 haskey_by_pointer(collection, p::Pointer{Nothing}) = true
-function haskey_by_pointer(collection, p::Pointer)::Bool
-    b = true
-    val = collection
-    @inbounds for (i, k) in enumerate(p.token)
-        if haskey_by_pointer(val, k)
-            val = getindex(val, k)
-        else
-            b = false 
-            break 
+
+function haskey_by_pointer(collection, p::Pointer)
+    for k in p.token
+        if !haskey_by_pointer(collection, k)
+            return false
         end
+        collection = collection[k]
     end
-    return b
-end
-function haskey_by_pointer(collection, k)::Bool
-    b = false
-    if isa(collection, Array)
-        if isa(k, Integer)
-            if length(collection) >= k
-                b = true
-            end
-        end
-    else         
-        if !isa(k, Integer)
-            if haskey(collection, k)
-                b = true
-            end
-        end
-    end
-    return b
+    return true
 end
 
-function getindex_by_pointer(collection, p::Pointer{Nothing})
-    collection
-end
-function getindex_by_pointer(collection, p::Pointer)    
-    getindex_by_pointer(collection, p.token)
+haskey_by_pointer(collection, k) = haskey(collection, k)
+
+haskey_by_pointer(collection::AbstractArray, k) = false
+
+function haskey_by_pointer(collection::AbstractArray, k::Integer)
+    return 1 <= k <= length(collection)
 end
 
-function getindex_by_pointer(collection, tokens::Tuple{<:Any})    
-    getindex(collection, tokens[1])
+function getindex_by_pointer(collection, ::Pointer{Nothing})
+    return collection
 end
-function getindex_by_pointer(collection, tokens::Tuple{<:Any, <:Any})    
-    getindex(getindex(collection, tokens[1]), tokens[2])
+
+function getindex_by_pointer(collection, p::Pointer)
+    return getindex_by_pointer(collection, p.token)
 end
-function getindex_by_pointer(collection, tokens::Tuple{<:Any, <:Any, <:Any})    
-    getindex(getindex(getindex(collection, tokens[1]), tokens[2]), tokens[3])
-end
-function getindex_by_pointer(collection, tokens::Tuple{<:Any, <:Any, <:Any, <:Any})    
-    getindex(getindex(getindex(getindex(collection, tokens[1]), tokens[2]), tokens[3]), tokens[4])
-end
-function getindex_by_pointer(collection, tokens::Tuple{<:Any, <:Any, <:Any, <:Any, <:Any})    
-    getindex(getindex(getindex(getindex(getindex(collection, tokens[1]), tokens[2]), tokens[3]), tokens[4]), tokens[5])
-end
-function getindex_by_pointer(collection, tokens::Tuple{<:Any, <:Any, <:Any, <:Any, <:Any, <:Any})    
-    getindex(getindex(getindex(getindex(getindex(getindex(collection, tokens[1]), tokens[2]), tokens[3]), tokens[4]), tokens[5]), tokens[6])
-end
-function getindex_by_pointer(collection, tokens::Tuple)
-    val = getindex_by_pointer(collection, tokens[1:6])
-    for i in 7:length(tokens)
-        val = getindex(val, tokens[i])
+
+function getindex_by_pointer(collection, tokens::Vector{Union{String, Int}})
+    for token in tokens
+        collection = collection[token]
     end
-    val
+    return collection
 end
-
 
 function get_by_pointer(collection, p::Pointer, default)
     if haskey_by_pointer(collection, p)
-        getindex_by_pointer(collection, p)
-    else 
-        default
+        return getindex_by_pointer(collection, p)
     end
+    return default
 end
 
-function setindex_by_pointer!(collection::T, v, p::Pointer{U}) where {T <: AbstractDict, U}
+_convert_v(v::U, ::Pointer{U}) where {U} = v
+function _convert_v(v::V, p::Pointer{U}) where {U, V}
     v = ismissing(v) ? null_value(p) : v
-    if !isa(v, U) && 
-        try 
-            v = convert(eltype(p), v)
-        catch e 
-            msg = isa(v, Array) ? "Vector" : "Any"
-            error("$v is not valid value for $p use '::$msg' if you don't need static type")
-            throw(e)
-        end
+    try
+        return convert(eltype(p), v)
+    catch
+        msg = isa(v, Array) ? "Vector" : "Any"
+        error(
+            "$(v) is not valid value for $(p) use '::$(msg)' if you don't " *
+            "need static type."
+        )
     end
-    prev = collection
-
-    @inbounds for (i, k) in enumerate(p.token)
-        if typeof(prev) <: AbstractDict
-            DT = typeof(prev)
-        else 
-            DT = OrderedDict{String, Any}
-        end
-
-        if isa(prev, Array)
-            if !isa(k, Integer)
-                throw(MethodError(setindex!, k))
-            end 
-            grow_array!(prev, k)
-        else 
-            if isa(k, Integer)
-                throw(MethodError(setindex!, k))
-            end
-            if !haskey(prev, k)
-                setindex!(prev, missing, k)
-            end
-        end
-
-        if i < length(p) 
-            tmp = getindex(prev, k)
-            if ismissing(tmp)
-                next_key = p.token[i+1]
-                if isa(next_key, Integer)
-                    new_data = Array{Any,1}(missing, next_key)
-                else 
-                    new_data = DT(next_key => missing)
-                end
-                setindex!(prev, new_data, k)
-            end
-            prev = getindex(prev, k)
-        end
-    end
-    setindex!(prev, v, p.token[end])
 end
 
-function grow_array!(arr::Array{T, N}, target_size) where T where N 
-    x = target_size - length(arr) 
-    if x > 0 
-        if T <: Real 
-            new_arr = similar(arr, x)
-            new_arr .= zero(T)
-        elseif T == Any 
-            new_arr = similar(arr, x)
-            new_arr .= missing 
-        else 
-            new_arr = Array{Union{T, Missing}}(undef, x)
-            new_arr .= missing 
+_new_data(::Any, n::Integer) = Vector{Any}(missing, n)
+_new_data(::Any, ::Any) = OrderedCollections.OrderedDict{String, Any}()
+_new_data(::AbstractDict, n::Integer) = Vector{Any}(missing, n)
+_new_data(x::AbstractDict, ::Any) = _new_container(x)
+
+_prep_prev(prev::Array, k::Integer) = grow_array!(prev, k)
+_prep_prev(::Array, k) = throw(MethodError(setindex!, k))
+_prep_prev(::Any, k::Integer) = throw(MethodError(setindex!, k))
+function _prep_prev(prev::Any, k)
+    if !haskey(prev, k)
+        setindex!(prev, missing, k)
+    end
+end
+
+function setindex_by_pointer!(
+    collection::T, v, p::Pointer{U}
+) where {T <: AbstractDict, U}
+    v = _convert_v(v, p)
+    prev = collection
+    for (i, k) in enumerate(p.token)
+        _prep_prev(prev, k)
+        if i < length(p)
+            if ismissing(prev[k])
+                setindex!(prev, _new_data(prev, p.token[i + 1]), k)
+            end
+            prev = prev[k]
         end
-        append!(arr, new_arr)
+    end
+    return setindex!(prev, v, p.token[end])
+end
+
+_new_arr(::Type{T}, x::Int) where {T <: Real} = zeros(T, x)
+_new_arr(::Type{Any}, x::Int) = Vector{Any}(missing, x)
+_new_arr(::Type{T}, x::Int) where {T} = Vector{Union{T, Missing}}(missing, x)
+
+function grow_array!(arr::Array{T, N}, target_size::Integer) where {T, N}
+    x = target_size - length(arr)
+    if x > 0
+        append!(arr, _new_arr(T, x))
     end
     return arr
 end
 
 Base.length(x::Pointer) = length(x.token)
-Base.eltype(x::Pointer{T}) where T = T
 
-function Base.show(io::IO, x::Pointer{T}) where T
-    print(io, 
-    "JSONPointer{", T, "}(\"/", join(x.token, "/"), "\")")
+Base.eltype(::Pointer{T}) where {T} = T
+
+function Base.show(io::IO, x::Pointer{T}) where {T}
+    print(io, "JSONPointer{", T, "}(\"/", join(x.token, "/"), "\")")
 end
 
-function Base.show(io::IO, x::Pointer{Nothing})
+function Base.show(io::IO, ::Pointer{Nothing})
     print(io, "JSONPointer{Nothing}(\"\")")
 end
