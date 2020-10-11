@@ -37,7 +37,7 @@ function _last_element_to_type!(jk)
     elseif x[2] == "boolean"
         return Bool
     elseif x[2] == "null"
-        return Nothing
+        return Missing
     else
         error(
             "You specified a type that JSON doesn't recognize! Instead of " *
@@ -251,6 +251,7 @@ _null_value(::Type{<:AbstractDict}) = OrderedCollections.OrderedDict{String, Any
 _null_value(::Type{<:AbstractVector{T}}) where {T} = T[]
 _null_value(::Type{Bool}) = false
 _null_value(::Type{Nothing}) = nothing
+_null_value(::Type{Missing}) = missing
 
 _null_value(::Type{Any}) = missing
 
