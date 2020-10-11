@@ -31,7 +31,7 @@ function _last_element_to_type!(jk)
     elseif x[2] == "number"
         return Union{Int, Float64}
     elseif x[2] == "object"
-        return Dict{String, Any}
+        return OrderedCollections.OrderedDict{String, Any}
     elseif x[2] == "array"
         return Vector{Any}
     elseif x[2] == "boolean"
