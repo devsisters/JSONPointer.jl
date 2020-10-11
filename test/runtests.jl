@@ -219,6 +219,14 @@ end
     @test isa(d["900"], Array)
 end
 
+
+@testset "unique" begin
+    p = [j"/a", j"/b", j"/a"]
+    up = unique(p)
+    @test length(up) == 2
+    @test j"/a" in up
+    @test j"/b" in up
+
 @testset "Failed setindex!" begin
     d = Dict("a" => [1])
     @test_throws ErrorException d[j"/a/b"] = 1
