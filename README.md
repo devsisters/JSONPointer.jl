@@ -6,13 +6,14 @@
 Implementation of JSON Pointers according to [RFC 6901](https://tools.ietf.org/html/rfc6901/)
 
 ## Overview
-[JSONPointer](https://tools.ietf.org/html/rfc6901/) is a Unicode string containing a sequence of zero or more reference tokens, each prefixed by a '/' (%x2F) character.  
+[JSONPointer](https://tools.ietf.org/html/rfc6901/) is a Unicode string containing a sequence of zero or more reference tokens, each prefixed by a '/' (%x2F) character.
 
 ## Examples
 
-**Constructing Dictionary**
+### Constructing Dictionary
+
 ```julia
-using JSONPointer 
+using JSONPointer
 
 julia>p1 = j"/a/1/b"
       p2 = j"/a/2/b"
@@ -22,9 +23,10 @@ Dict{String,Any} with 1 entry:
 
 ```
 
-**Accessing nested data**
+### Accessing nested data
+
 ```julia
-using JSONPointer 
+using JSONPointer
 
 julia> arr = [[10, 20, 30, ["me"]]]
        arr[j"/1"] == [10, 20, 30, ["me"]]
@@ -40,17 +42,26 @@ julia> dict = Dict("a" => Dict("b" => Dict("c" => [100, Dict("d" => 200)])))
 ```
 
 ## Advanced
-**Constructing Dictionary With Static type**
 
-additionally, you can enforce type with '::T' at the end of pointer 
+### Constructing Dictionary With Static type
+
+You can enforce type with `::T` at the end of pointer:
 ```julia
-    p1 = j"/a::Vector{Int}"
-    p2 = j"/b/2::String"
-    data = Dict(p1 => [1,2,3], p2 => "Must be a String")
+  p1 = j"/a::array"
+  p2 = j"/b/2::string"
+  data = Dict(p1 => [1,2,3], p2 => "Must be a String")
 ```
+The type `T` must be one of the six types supported by JSON:
+  * `::string`
+  * `::number`
+  * `::object`
+  * `::array`
+  * `::boolean`
+  * `::null`
 
-**String number as a key**
-If you need to use a string number as key for dict, put '\' in front of a number 
+### String number as a key
+
+If you need to use a string number as key for dict, put '\' in front of a number
 ```julia
     p1 = j"/\10"
     data = Dict(p1 => "this won't be a array")
@@ -60,6 +71,7 @@ If you need to use a string number as key for dict, put '\' in front of a number
 
 
 ## Limitations
+
 - Can only used on Dictionary with a 'String' key
 - Supports Only 'Dict' and 'OrderedDict', but could be extended for other 'AbstractDict' types. feel free to create a issue
 - Note that Julia is using 1-based index, 0-based index can be used if argument `shift_index = true` is given to a `JSONPointer.Pointer` constructer
