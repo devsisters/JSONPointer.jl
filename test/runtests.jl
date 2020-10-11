@@ -91,14 +91,14 @@ end
 end
 
 @testset "JSONPointer Advanced" begin
-    a = j"/a/2/d::Vector"
-    b = j"/a/2/e::Vector{Int}"
-    c = j"/a/2/f::Vector{Float64}"
+    a = j"/a/2/d::array"
+    b = j"/a/2/e::object"
+    c = j"/a/2/f::boolean"
 
     @test a.tokens == ["a", 2, "d"]
-    @test eltype(a) <: Array
-    @test eltype(b) <: Array{Int, 1}
-    @test eltype(c) <: Array{Float64, 1}
+    @test eltype(a) <: Vector{Any}
+    @test eltype(b) <: Dict{String, Any}
+    @test eltype(c) <: Bool
 end
 
 @testset "construct Dict with JSONPointer" begin
@@ -171,8 +171,8 @@ end
 end
 
 @testset "Enforce type on JSONPointer" begin
-    p1 = j"/a/1::String"
-    p2 = j"/a/2::Int"
+    p1 = j"/a/1::string"
+    p2 = j"/a/2::number"
 
     data = Dict(p1 =>"this", p2 => 20)
     @test data[p1] == "this"
@@ -181,9 +181,9 @@ end
     @test_throws ErrorException data[p1] = 20
     @test_throws ErrorException data[p2] = "this"
 
-    p1 = j"/a/1::Vector{Int}"
-    p2 = j"/a/2::Float64"
-    p3 = j"/b::Vector{String}"
+    p1 = j"/a/1::array"
+    p2 = j"/a/2::number"
+    p3 = j"/b::array"
 
     data = Dict(p1 =>[10], p2 => 20,  p3 => ["this", "is"])
     @test data[p1] == Int[10]
@@ -194,8 +194,8 @@ end
     @test_throws ErrorException data[p3] = "this"
 
     d = Dict(p1 => missing, p3 => missing)
-    @test d[p1] == JSONPointer.null_value(p1)
-    @test d[p3] == JSONPointer.null_value(p3)
+    @test d[p1] == JSONPointer._null_value(p1)
+    @test d[p3] == JSONPointer._null_value(p3)
 
     # TODO User Defined type
     struct Foo
@@ -217,4 +217,9 @@ end
 
     @test d[p3] == 3
     @test isa(d["900"], Array)
+end
+
+@testset "Failed setindex!" begin
+    d = Dict("a" => [1])
+    @test_throws ErrorException d[j"/a/b"] = 1
 end
