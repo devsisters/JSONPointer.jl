@@ -97,7 +97,7 @@ end
 
     @test a.tokens == ["a", 2, "d"]
     @test eltype(a) <: Vector{Any}
-    @test eltype(b) <: Dict{String, Any}
+    @test eltype(b) <: OrderedDict{String, Any}
     @test eltype(c) <: Bool
 end
 
@@ -158,52 +158,6 @@ end
     @test_broken get(data, j"/1", missing) |> ismissing
 end
 
-@testset "grow object and array" begin
-    d = Dict(j"/a" => Dict())
-    d[j"/a/b"] = []
-    d[j"/a/b/2"] = 1
-    d[j"/a/b/5"] = 2
-    @test_throws Exception d[j"/a/5"] = "something"
-    @test_throws Exception d[j"/a/b/gd"] = "nothing"
-
-    @test isa(d[j"/a/b"], Array)
-    @test isa(d[j"/a/b/1"], Missing)
-end
-
-@testset "Enforce type on JSONPointer" begin
-    p1 = j"/a/1::string"
-    p2 = j"/a/2::number"
-
-    data = Dict(p1 =>"this", p2 => 20)
-    @test data[p1] == "this"
-    @test data[p2] == 20
-
-    @test_throws ErrorException data[p1] = 20
-    @test_throws ErrorException data[p2] = "this"
-
-    p1 = j"/a/1::array"
-    p2 = j"/a/2::number"
-    p3 = j"/b::array"
-
-    data = Dict(p1 =>[10], p2 => 20,  p3 => ["this", "is"])
-    @test data[p1] == Int[10]
-    @test data[p2] == 20.
-    @test data[p3] == ["this", "is"]
-
-    @test_throws ErrorException data[p2] = [1000]
-    @test_throws ErrorException data[p3] = "this"
-
-    d = Dict(p1 => missing, p3 => missing)
-    @test d[p1] == JSONPointer._null_value(p1)
-    @test d[p3] == JSONPointer._null_value(p3)
-
-    # TODO User Defined type
-    struct Foo
-    end
-    # @test_broken j"/foo::Foo"
-
-end
-
 @testset "literal string for a Number" begin
     p1 = j"/\5"
     p2 = j"/\559"
@@ -219,15 +173,52 @@ end
     @test isa(d["900"], Array)
 end
 
-
 @testset "unique" begin
     p = [j"/a", j"/b", j"/a"]
     up = unique(p)
     @test length(up) == 2
     @test j"/a" in up
     @test j"/b" in up
+end
 
 @testset "Failed setindex!" begin
     d = Dict("a" => [1])
     @test_throws ErrorException d[j"/a/b"] = 1
+end
+
+@testset "grow object and array" begin
+    d = Dict(j"/a" => Dict())
+    d[j"/a/b"] = []
+    d[j"/a/b/2"] = 1
+    d[j"/a/b/5"] = 2
+    @test_throws Exception d[j"/a/5"] = "something"
+    @test_throws Exception d[j"/a/b/gd"] = "nothing"
+
+    @test isa(d[j"/a/b"], Array)
+    @test isa(d[j"/a/b/1"], Missing)
+end
+
+@testset "Enforce type on JSONPointer" begin
+    p1 = j"/a/1::string"
+    p2 = j"/a/2::number"
+    p3 = j"/a/3::object"
+    p4 = j"/a/4::array"
+    p5 = j"/a/5::boolean"
+    p6 = j"/a/6::null"
+
+    data = Dict(p1 =>"string", p2 => 1, p3 => Dict(), p4 => [], p5 => true, p6 => missing)
+    @test data[p1] == "string"
+    @test data[p2] == 1
+    
+    @test_throws ErrorException data[p1] = 1
+    @test_throws ErrorException data[p2] = "string"
+    
+    d = Dict(p1 =>missing, p2 => missing, p3 => missing, p4 => missing, p5 => missing)
+    @test d[p1] == ""
+    @test d[p2] == 0
+    @test isa(d[p3], OrderedDict)
+    @test isa(d[p4], Array{Any, 1})
+    @test d[p5] == false
+
+
 end
