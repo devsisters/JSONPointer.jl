@@ -31,13 +31,13 @@ function _last_element_to_type!(jk)
     elseif x[2] == "number"
         return Union{Int, Float64}
     elseif x[2] == "object"
-        return Dict{String, Any}
+        return OrderedCollections.OrderedDict{String, Any}
     elseif x[2] == "array"
         return Vector{Any}
     elseif x[2] == "boolean"
         return Bool
     elseif x[2] == "null"
-        return Nothing
+        return Missing
     else
         error(
             "You specified a type that JSON doesn't recognize! Instead of " *
@@ -161,6 +161,28 @@ end
 Base.getindex(A::AbstractArray, p::Pointer) = _getindex(A, p)
 Base.haskey(A::AbstractArray, p::Pointer) = _haskey(A, p)
 
+function Base.unique(arr::AbstractArray{<:Pointer, N}) where {N}
+    out = deepcopy(arr)
+    if isempty(arr)
+        return out
+    end
+    pointers = getfield.(arr, :tokens)
+    if allunique(pointers)
+        return out
+    end
+    delete_target = Int[]
+    for p in pointers
+        indicies = findall(el -> el == p, pointers)
+        if length(indicies) > 1
+            append!(delete_target, indicies[1:end-1])
+        end
+    end
+    deleteat!(out, unique(delete_target))
+    return out
+end
+
+Base.:(==)(a::Pointer{U}, b::Pointer{U}) where {U} = a.tokens == b.tokens
+
 # ==============================================================================
 
 _checked_get(collection::AbstractArray, token::Int) = collection[token]
@@ -229,6 +251,7 @@ _null_value(::Type{<:AbstractDict}) = OrderedCollections.OrderedDict{String, Any
 _null_value(::Type{<:AbstractVector{T}}) where {T} = T[]
 _null_value(::Type{Bool}) = false
 _null_value(::Type{Nothing}) = nothing
+_null_value(::Type{Missing}) = missing
 
 _null_value(::Type{Any}) = missing
 
