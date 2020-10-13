@@ -131,32 +131,6 @@ function Base.show(io::IO, ::Pointer{Nothing})
     print(io, "JSONPointer{Nothing}(\"\")")
 end
 
-# This code block needs some explaining.
-#
-# Ideally, one would define methods like Base.haskey(::AbstractDict, ::Pointer).
-# However, this causes an ambiguity with Base.haskey(::Dict, key), which has a
-# more concrete first argument and a less concrete second argument. We could
-# just define both methods to avoid the ambiguity with Dict, but this would
-# probably break any package which defines an <:AbstractDict and fails to type
-# the second argument to haskey, getindex, etc!
-#
-# To avoid the ambiguity issue, we have to manually encode each AbstractDict
-# subtype that we support :(
-for T in (Dict, OrderedCollections.OrderedDict)
-    @eval begin
-        # This method is used when creating new dictionaries from JSON pointers.
-        function $T{K, V}(kv::Pair{<:Pointer, V}...) where {V, K<:Pointer}
-            return $T{String, Any}()
-        end
-
-        _new_container(::$T) = $T{String, Any}()
-
-        Base.haskey(dict::$T, p::Pointer) = _haskey(dict, p)
-        Base.getindex(dict::$T, p::Pointer) = _getindex(dict, p)
-        Base.setindex!(dict::$T, v, p::Pointer) = _setindex!(dict, v, p)
-        Base.get(dict::$T, p::Pointer, default) = _get(dict, p, default)
-    end
-end
 
 Base.getindex(A::AbstractArray, p::Pointer) = _getindex(A, p)
 Base.haskey(A::AbstractArray, p::Pointer) = _haskey(A, p)
