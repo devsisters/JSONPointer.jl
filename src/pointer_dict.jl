@@ -57,16 +57,14 @@ end
 
 # ==============================================================================
 Base.getindex(A::AbstractArray, p::Pointer) = _getindex(A, p.tokens)
-function Base.getindex(collection::AbstractDict, p::Pointer) 
-    _getindex(collection, p.tokens)
-end
+
 function Base.getindex(collection::PointerDict, p::Pointer)
     return _getindex(collection.d, p.tokens)
 end
 Base.getindex(collection::PointerDict, i) = getindex(collection.d, i)
 Base.getindex(collection::PointerDict, ::Pointer{Nothing}) = collection
 
-
+_getindex(collection, p::Pointer) = _getindex(collection, p.tokens) 
 function _getindex(collection, tokens::Vector{Union{String, Int}})
     for token in tokens
         collection = _checked_get(collection, token)
