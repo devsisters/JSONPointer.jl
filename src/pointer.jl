@@ -132,83 +132,9 @@ function Base.show(io::IO, ::Pointer{Nothing})
 end
 
 
-Base.getindex(A::AbstractArray, p::Pointer) = _getindex(A, p)
-Base.haskey(A::AbstractArray, p::Pointer) = _haskey(A, p)
-
-function Base.unique(arr::AbstractArray{<:Pointer, N}) where {N}
-    out = deepcopy(arr)
-    if isempty(arr)
-        return out
-    end
-    pointers = getfield.(arr, :tokens)
-    if allunique(pointers)
-        return out
-    end
-    delete_target = Int[]
-    for p in pointers
-        indicies = findall(el -> el == p, pointers)
-        if length(indicies) > 1
-            append!(delete_target, indicies[1:end-1])
-        end
-    end
-    deleteat!(out, unique(delete_target))
-    return out
-end
-
 Base.:(==)(a::Pointer{U}, b::Pointer{U}) where {U} = a.tokens == b.tokens
 
 # ==============================================================================
-
-_checked_get(collection::AbstractArray, token::Int) = collection[token]
-
-_checked_get(collection::AbstractDict, token::String) = collection[token]
-
-function _checked_get(collection, token)
-    error(
-        "JSON pointer does not match the data-structure. I tried (and " *
-        "failed) to index $(collection) with the key: $(token)"
-    )
-end
-
-# ==============================================================================
-
-_haskey(::Any, ::Pointer{Nothing}) = true
-
-function _haskey(collection, p::Pointer)
-    for token in p.tokens
-        if !_haskey(collection, token)
-            return false
-        end
-        collection = _checked_get(collection, token)
-    end
-    return true
-end
-
-_haskey(collection::AbstractDict, token::String) = haskey(collection, token)
-
-function _haskey(collection::AbstractArray, token::Int)
-    return 1 <= token <= length(collection)
-end
-
-_haskey(::Any, ::Any) = false
-
-# ==============================================================================
-
-_getindex(collection, ::Pointer{Nothing}) = collection
-
-function _getindex(collection, p::Pointer)
-    return _getindex(collection, p.tokens)
-end
-
-function _getindex(collection, tokens::Vector{Union{String, Int}})
-    for token in tokens
-        collection = _checked_get(collection, token)
-    end
-    return collection
-end
-
-# ==============================================================================
-
 function _get(collection, p::Pointer, default)
     if _haskey(collection, p)
         return _getindex(collection, p)
@@ -219,6 +145,7 @@ end
 # ==============================================================================
 
 _null_value(p::Pointer) = _null_value(eltype(p))
+_null_value(::Type{Any}) = missing
 _null_value(::Type{String}) = ""
 _null_value(::Type{<:Real}) = 0
 _null_value(::Type{<:AbstractDict}) = OrderedCollections.OrderedDict{String, Any}()
@@ -226,8 +153,6 @@ _null_value(::Type{<:AbstractVector{T}}) where {T} = T[]
 _null_value(::Type{Bool}) = false
 _null_value(::Type{Nothing}) = nothing
 _null_value(::Type{Missing}) = missing
-
-_null_value(::Type{Any}) = missing
 
 _convert_v(v::U, ::Pointer{U}) where {U} = v
 function _convert_v(v::V, p::Pointer{U}) where {U, V}
@@ -242,45 +167,6 @@ function _convert_v(v::V, p::Pointer{U}) where {U, V}
     end
 end
 
-function _add_element_if_needed(prev::AbstractVector{T}, k::Int) where {T}
-    x = k - length(prev)
-    if x > 0
-        append!(prev, [_null_value(T) for _ = 1:x])
-    end
-    return
-end
-
-function _add_element_if_needed(
-    prev::AbstractDict{K, V}, k::String
-) where {K, V}
-    if !haskey(prev, k)
-        prev[k] = _null_value(V)
-    end
-end
-
-function _add_element_if_needed(collection, token)
-    error(
-        "JSON pointer does not match the data-structure. I tried (and " *
-        "failed) to set $(collection) at the index: $(token)"
-    )
-end
-
 _new_data(::Any, n::Int) = Vector{Any}(missing, n)
 _new_data(::AbstractVector, ::String) = OrderedCollections.OrderedDict{String, Any}()
-_new_data(x::AbstractDict, ::String) = _new_container(x)
-
-function _setindex!(collection::AbstractDict, v, p::Pointer)
-    prev = collection
-    for (i, token) in enumerate(p.tokens)
-        _add_element_if_needed(prev, token)
-        if i != length(p)
-            if ismissing(prev[token])
-                prev[token] = _new_data(prev, p.tokens[i + 1])
-            end
-            prev = prev[token]
-        end
-    end
-    prev[p.tokens[end]] = _convert_v(v, p)
-    return v
-end
-
+_new_data(x::AbstractDict, ::String) = empty(x)
