@@ -154,6 +154,33 @@ end
     @test_broken get(data, j"/1", missing) |> ismissing
 end
 
+@testset "Pointer with AbstractDict" begin 
+    doc = Dict(
+        "foo" => ["bar", "baz"],
+        "a"   => 1, 
+        "b"   => OrderedDict("c" => 2) 
+    )
+
+    @test JSONPointer._getindex(doc, j"/foo") ==  ["bar", "baz"] 
+    @test JSONPointer._getindex(doc, j"/foo/1") ==  "bar"
+    @test JSONPointer._getindex(doc, j"/b/c") ==  2
+    @test JSONPointer._getindex(doc, j"/a") ==  1 
+
+    @test JSONPointer._haskey(doc, j"/foo")
+    @test JSONPointer._haskey(doc, j"/foo/2")
+    @test JSONPointer._haskey(doc, j"/b/c")
+    @test JSONPointer._haskey(doc, j"/a")
+    
+    
+    @test !JSONPointer._haskey(doc, j"/d")
+    @test !JSONPointer._haskey(doc, j"/foo/3")
+    
+    JSONPointer._setindex!(doc, 3, j"/d")
+    @test JSONPointer._getindex(doc, j"/d") ==  3 
+    JSONPointer._setindex!(doc, "faz", j"/foo/3")
+    @test JSONPointer._getindex(doc, j"/foo/3") ==  "faz"
+end
+
 @testset "literal string for a Number" begin
     p1 = j"/\5"
     p2 = j"/\559"
@@ -168,14 +195,6 @@ end
     @test d[p3] == 3
     @test isa(d["900"], Array)
 end
-
-# @testset "unique" begin
-#     p = [j"/a", j"/b", j"/a"]
-#     up = unique(p)
-#     @test length(up) == 2
-#     @test j"/a" in up
-#     @test j"/b" in up
-# end
 
 @testset "Failed setindex!" begin
     d = PointerDict("a" => [1])
