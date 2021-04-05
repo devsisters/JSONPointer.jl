@@ -219,6 +219,27 @@ end
     @test isa(d[p3], OrderedDict)
     @test isa(d[p4], Array{Any, 1})
     @test d[p5] == false
+end
 
+@testset "Exceptions" begin
+    # error on undefined datatype
+    @test_throws ErrorException JSONPointer.Pointer("/a::nothing")
+    @test_throws ErrorException JSONPointer.Pointer("/a/1::Int")
 
+    # error for 0 based indexing 
+    @test_throws ArgumentError JSONPointer.Pointer("/0")
+    @test_throws ArgumentError JSONPointer.Pointer("/a/0")
+    @test isa(JSONPointer.Pointer("/0"; shift_index = true), JSONPointer.Pointer)
+
+end
+
+@testset "Miscellaneous" begin 
+    p1 = j"/a/b/1/c"
+
+    @test p1 == j"/a/b/1/c"
+    @test p1 != j"/b/a/1/c"
+
+    arr = [1,2,3]
+    haskey(arr, j"/1")
+    !haskey(arr, j"/4")
 end
